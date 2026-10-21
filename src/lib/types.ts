@@ -21,6 +21,7 @@ export interface Meal {
   recipe: string;
   notes: string;
   source: string;
+  style: string; // Mexican, Italian, … ('' = work it out from the name)
   archived: number;
   created_at: string;
   ingredients: Ingredient[];
@@ -37,11 +38,34 @@ export interface PantryItem {
   on_hand: number;
   kroger_upc: string | null;
   kroger_desc: string | null;
+  snack: number;
 }
 
 export interface SlotConfig {
   label: string;
   category: string;
+}
+
+/** A side on a dinner. */
+export interface SidePick {
+  id: string;
+  locked: number;
+  skipped: string[];
+}
+
+/** A snack on this week's list; `key` is the pantry item. */
+export interface SnackPick {
+  key: string;
+  qty: number;
+  locked: number;
+  skipped: string[];
+}
+
+export interface SidePair {
+  meal_id: string;
+  side_id: string;
+  kept: number;
+  skipped: number;
 }
 
 export interface Slot extends SlotConfig {
@@ -52,6 +76,7 @@ export interface Slot extends SlotConfig {
   cook: string | null;
   skipped: string[];
   eaten_date: string | null;
+  sides: SidePick[];
 }
 
 export interface HistoryRow {
@@ -73,6 +98,7 @@ export interface Settings {
   stores: string[];
   units: string[];
   cooks: string[];
+  styles: string[];
 }
 
 export interface AppState {
@@ -84,6 +110,12 @@ export interface AppState {
   last_eaten: Record<string, string>;
   history: HistoryRow[];
   checks: Record<string, number>;
+  snacks: SnackPick[];
+  /** Last week's snack list, for "Same as last week". */
+  prev_snacks: SnackPick[];
+  /** How many past weeks each snack was locked in. */
+  snack_counts: Record<string, number>;
+  side_pairs: SidePair[];
   features: { ai: boolean; kroger: boolean };
 }
 
@@ -99,6 +131,7 @@ export interface MealDraft {
   recipe: string;
   notes: string;
   source: string;
+  style?: string;
   ingredients: Ingredient[];
 }
 
@@ -123,6 +156,13 @@ export interface KrogerDeal {
   upc: string;
   description: string;
   size: string;
+  regular: number;
+  promo: number;
+}
+
+/** Today's price for a matched product; `promo` is 0 when it isn't on sale. */
+export interface KrogerPrice {
+  upc: string;
   regular: number;
   promo: number;
 }

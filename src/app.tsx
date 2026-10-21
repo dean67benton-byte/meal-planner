@@ -9,6 +9,7 @@ import { MealEditor } from './screens/meal-editor';
 import { IdeasScreen } from './screens/ideas';
 import { GroceryScreen } from './screens/grocery';
 import { PantryScreen } from './screens/pantry';
+import { SnacksScreen } from './screens/snacks';
 import { MoreScreen } from './screens/more';
 import { JoinScreen, WhoScreen } from './screens/join';
 
@@ -47,10 +48,11 @@ export function App() {
   else if (screen === 'ideas') body = <IdeasScreen />;
   else if (screen === 'groceries') body = <GroceryScreen />;
   else if (screen === 'pantry') body = <PantryScreen />;
+  else if (screen === 'snacks') body = <SnacksScreen />;
   else if (screen === 'more') body = <MoreScreen query={route.query} />;
   else body = <WeekScreen />;
 
-  const active = screen === 'pantry' ? 'groceries' : screen || 'week';
+  const active = screen === 'pantry' ? 'groceries' : screen === 'snacks' ? 'week' : screen || 'week';
   return (
     <StoreContext.Provider value={store}>
       <main class="screen">{body}</main>

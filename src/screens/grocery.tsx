@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { short } from '../lib/dates';
-import { buildList, cartQuantity, fmtQty, money, type GroceryLine } from '../lib/grocery';
+import { buildList, cartQuantity, fmtQty, money, PACKAGE_UNITS, type GroceryLine } from '../lib/grocery';
 import { useStore } from '../lib/store';
 import type { KrogerProduct, KrogerStatus } from '../lib/types';
 import { Icon } from '../icons';
@@ -45,7 +45,7 @@ export function GroceryScreen() {
       <header class="top">
         <div class="top-title">
           <h1>Groceries</h1>
-          <p class="muted">Week of {short(s.week_of)} · {list.lockedCount} locked meals</p>
+          <p class="muted">Week of {short(s.week_of)} · {list.lockedCount} locked meals{list.snackCount ? ` · ${list.snackCount} snacks` : ''}</p>
         </div>
         <a class="btn" href="#/pantry">Prices & pantry</a>
       </header>
@@ -55,7 +55,12 @@ export function GroceryScreen() {
           {list.unlocked} {list.unlocked === 1 ? "meal isn't" : "meals aren't"} locked in yet, so {list.unlocked === 1 ? "it's" : "they're"} not on this list. <a href="#/week">Lock them on the Week tab.</a>
         </div>
       )}
-      {!list.lockedCount && <div class="empty">Lock in meals on the Week tab and their ingredients add up here.</div>}
+      {list.unlockedExtras > 0 && (
+        <div class="callout small">
+          {list.unlockedExtras} {list.unlockedExtras === 1 ? "side or snack isn't" : "sides and snacks aren't"} locked in yet. <a href="#/week">Lock them on the Week tab.</a>
+        </div>
+      )}
+      {!list.lockedCount && !list.snackCount && <div class="empty">Lock in meals on the Week tab and their ingredients add up here.</div>}
 
       {list.shop.length > 0 && (
         <div class="totals card">
@@ -173,7 +178,7 @@ export function ItemSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' | 
   );
 }
 
-function MatchSheet({ line, onClose }: { line: GroceryLine; onClose: () => void }) {
+export function MatchSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' | 'unit' | 'key' | 'item'>; onClose: () => void }) {
   const store = useStore();
   const [term, setTerm] = useState(line.name);
   const [results, setResults] = useState<KrogerProduct[] | null>(null);
@@ -202,7 +207,7 @@ function MatchSheet({ line, onClose }: { line: GroceryLine; onClose: () => void 
         store: 'Kroger',
         kroger_upc: p.upc,
         kroger_desc: [p.brand, p.description, p.size].filter(Boolean).join(' ').slice(0, 120),
-        price: line.item?.price ?? (line.unit === 'each' || line.unit === 'pkg' ? p.price : null),
+        price: line.item?.price ?? (PACKAGE_UNITS.has(line.unit.toLowerCase()) ? p.price : null),
       }),
     );
   };

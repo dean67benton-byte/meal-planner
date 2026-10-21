@@ -46,7 +46,7 @@ export function useStoreState(): Store {
       // First visit to a week: create its slots with fresh suggestions.
       if (!s.slots.length && s.settings.slots.length) {
         const blank: Slot[] = s.settings.slots.map((c, i) => ({
-          ...c, week_of: w, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null,
+          ...c, week_of: w, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [],
         }));
         await api.initWeek(w, fillWeek(s, w, blank));
         s = await api.state(w);

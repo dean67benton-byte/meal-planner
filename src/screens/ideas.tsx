@@ -15,13 +15,23 @@ export function IdeasScreen() {
   const s = store.state!;
   const [maxTime, setMaxTime] = useState<MaxTime>('≤ 30 min');
   const [protein, setProtein] = useState('All');
+  const [kind, setKind] = useState<'Meals' | 'Sides'>('Meals');
   const have = new Set(s.meals.map((m) => m.name.toLowerCase()));
   const limit = maxTime === '≤ 20 min' ? 20 : maxTime === '≤ 30 min' ? 30 : Infinity;
   // Slow-cooker meals count only their hands-on prep time.
   const handsOn = (i: MealDraft) => ((i.cook_min ?? 0) > 60 ? (i.prep_min ?? 0) : (i.prep_min ?? 0) + (i.cook_min ?? 0));
   const starters = IDEAS.filter(
-    (i) => !have.has(i.name.toLowerCase()) && handsOn(i) <= limit && (protein === 'All' || i.protein === protein),
+    (i) =>
+      !have.has(i.name.toLowerCase()) &&
+      (i.category === 'Side') === (kind === 'Sides') &&
+      handsOn(i) <= limit &&
+      (kind === 'Sides' || protein === 'All' || i.protein === protein),
   );
+
+  const addAll = (drafts: MealDraft[]) =>
+    store.run(async () => {
+      for (const d of drafts) await api.saveMeal(d);
+    }).then((ok) => ok && store.toast(`Added ${drafts.length} sides`));
 
   return (
     <>
@@ -42,10 +52,16 @@ export function IdeasScreen() {
 
       <h2>Starter ideas</h2>
       <div class="filters">
+        <Seg label="Kind" value={kind} options={['Meals', 'Sides'] as const} onChange={setKind} />
         <Seg label="Time" value={maxTime} options={['≤ 20 min', '≤ 30 min', 'Any'] as const} onChange={setMaxTime} />
-        <Seg label="Protein" value={protein} options={['All', ...new Set(IDEAS.map((i) => i.protein))]} onChange={setProtein} />
+        {kind === 'Meals' && (
+          <Seg label="Protein" value={protein} options={['All', ...new Set(IDEAS.filter((i) => i.category !== 'Side').map((i) => i.protein))]} onChange={setProtein} />
+        )}
       </div>
       <p class="small muted">Slow-cooker meals count only their hands-on time.</p>
+      {kind === 'Sides' && starters.length > 1 && (
+        <button class="btn wide" onClick={() => addAll(starters)}><Icon name="plus" size={18} /> Add all {starters.length} sides</button>
+      )}
       <ul class="list cards">
         {starters.map((d) => <DraftCard key={d.name} draft={d} />)}
       </ul>
@@ -67,7 +83,7 @@ function DraftCard({ draft, why }: { draft: MealDraft; why?: string }) {
     <li class="card idea">
       <div class="row between">
         <span class="meal-name">{draft.name}</span>
-        <span class="small muted">{draft.category}</span>
+        <span class="small muted">{[draft.category, draft.style].filter(Boolean).join(' · ')}</span>
       </div>
       <span class="meta">
         {[draft.protein, `${draft.prep_min ?? '?'} min prep`, draft.cook_min ? `${draft.cook_min} min cook` : '', `${draft.ingredients.length} ingredients`].filter(Boolean).join(' · ')}

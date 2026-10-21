@@ -4,7 +4,8 @@ import type { Ingredient, MealDraft } from './types';
 
 interface Idea {
   name: string;
-  category?: 'Dinner' | 'Work Lunch';
+  category?: 'Dinner' | 'Work Lunch' | 'Side';
+  style?: string;
   protein: string;
   prep: number;
   cook: number;
@@ -106,12 +107,60 @@ const RAW: Idea[] = [
     steps: ['Sauté the veggie mix 5 minutes.', 'Add broth; bring to a boil.', 'Add noodles 8 minutes, then shredded chicken.'] },
 ];
 
+// Starter sides: cheap, mostly 5 minutes of work. No style means it goes with anything.
+const SIDES: Idea[] = [
+  { name: 'Mexican Rice', style: 'Mexican', protein: 'Vegetarian', prep: 2, cook: 20,
+    items: ['1 pkg Spanish rice mix'], steps: ['Cook the rice mix as the packet says.'] },
+  { name: 'Refried Beans with Cheese', style: 'Mexican', protein: 'Vegetarian', prep: 2, cook: 5,
+    items: ['1 can Refried beans', '0.5 cup Shredded cheese'], steps: ['Warm the beans in a pot or the microwave, stirring.', 'Top with cheese and let it melt.'] },
+  { name: 'Chips & Salsa', style: 'Mexican', protein: 'Vegetarian', prep: 1, cook: 0,
+    items: ['1 bag Tortilla chips', '1 jar Salsa'], steps: ['Open and serve.'] },
+  { name: 'Street Corn', style: 'Mexican', protein: 'Vegetarian', prep: 3, cook: 8,
+    items: ['1 bag Frozen corn', '2 tbsp Mayonnaise', '0.25 cup Cotija cheese', '1 each Lime'],
+    steps: ['Char the corn in a hot skillet, about 8 minutes.', 'Stir in mayo, cheese, and a squeeze of lime.'] },
+  { name: 'Garlic Bread', style: 'Italian', protein: 'Vegetarian', prep: 1, cook: 12,
+    items: ['1 pkg Frozen garlic bread'], steps: ['Bake as the box says.'] },
+  { name: 'Caesar Salad Kit', style: 'Italian', protein: 'Vegetarian', prep: 3, cook: 0,
+    items: ['1 bag Caesar salad kit'], steps: ['Toss the kit together.'] },
+  { name: 'Mashed Potatoes', style: 'American', protein: 'Vegetarian', prep: 5, cook: 20,
+    items: ['2 lb Yukon gold potatoes', '3 tbsp Butter', '0.5 cup Milk'],
+    steps: ['Peel (or not) and cube potatoes; boil 15–20 minutes until soft.', 'Drain and mash with butter, milk, salt, and pepper.'] },
+  { name: 'Roasted Baby Potatoes', style: 'American', protein: 'Vegetarian', prep: 3, cook: 25,
+    items: ['1.5 lb Baby potatoes'], steps: ['Heat oven to 425°F.', 'Halve potatoes, toss with oil, salt, and pepper.', 'Roast 25 minutes.'] },
+  { name: 'Tater Tots', style: 'American', protein: 'Vegetarian', prep: 1, cook: 20,
+    items: ['1 bag Frozen tater tots'], steps: ['Bake or air-fry as the bag says.'] },
+  { name: 'Mac & Cheese', protein: 'Vegetarian', prep: 2, cook: 10,
+    items: ['1 box Mac and cheese', '0.25 cup Milk', '2 tbsp Butter'], steps: ['Make as the box says.'] },
+  { name: 'Coleslaw', style: 'BBQ', protein: 'Vegetarian', prep: 3, cook: 0,
+    items: ['1 bag Coleslaw mix', '0.5 cup Coleslaw dressing'], steps: ['Toss the mix with dressing. Better after 10 minutes in the fridge.'] },
+  { name: 'Baked Beans', style: 'BBQ', protein: 'Vegetarian', prep: 1, cook: 10,
+    items: ['1 can Baked beans'], steps: ['Warm in a pot, stirring now and then.'] },
+  { name: 'Corn on the Cob', protein: 'Vegetarian', prep: 2, cook: 10,
+    items: ['4 each Corn on the cob', '2 tbsp Butter'], steps: ['Boil 8–10 minutes (or microwave in the husk 4 minutes each).', 'Butter and salt.'] },
+  { name: 'Steam-in-Bag Green Beans', protein: 'Vegetarian', prep: 1, cook: 5,
+    items: ['1 bag Steam-in-bag green beans'], steps: ['Microwave as the bag says; season with salt and pepper.'] },
+  { name: 'Roasted Broccoli', protein: 'Vegetarian', prep: 3, cook: 18,
+    items: ['1 bag Broccoli florets', '0.25 cup Parmesan'], steps: ['Heat oven to 425°F.', 'Toss broccoli with oil and salt; roast 18 minutes.', 'Sprinkle with parmesan.'] },
+  { name: 'Side Salad', protein: 'Vegetarian', prep: 3, cook: 0,
+    items: ['1 bag Salad kit'], steps: ['Toss the kit together.'] },
+  { name: 'Jasmine Rice', style: 'Asian', protein: 'Vegetarian', prep: 1, cook: 15,
+    items: ['1 cup Jasmine rice'], steps: ['Rinse rice; simmer with 1.5 cups water, covered, 15 minutes.'] },
+  { name: 'Frozen Egg Rolls', style: 'Asian', protein: 'Other', prep: 1, cook: 15,
+    items: ['1 pkg Frozen egg rolls'], steps: ['Bake or air-fry as the box says.'] },
+  { name: 'Edamame', style: 'Asian', protein: 'Vegetarian', prep: 1, cook: 5,
+    items: ['1 bag Frozen edamame'], steps: ['Microwave or boil; sprinkle with salt.'] },
+  { name: 'Hash Browns', style: 'Breakfast', protein: 'Vegetarian', prep: 1, cook: 15,
+    items: ['1 bag Frozen hash browns'], steps: ['Cook in a hot oiled skillet until crisp, flipping once.'] },
+  { name: 'Biscuits', style: 'Breakfast', protein: 'Vegetarian', prep: 2, cook: 13,
+    items: ['1 can Refrigerated biscuits'], steps: ['Bake as the can says.'] },
+];
+
 function parseItem(s: string): Ingredient {
   const [qty, unit, ...rest] = s.split(' ');
   return { qty: Number(qty), unit, name: rest.join(' ') };
 }
 
-export const IDEAS: MealDraft[] = RAW.map((r) => ({
+export const IDEAS: MealDraft[] = [...RAW, ...SIDES.map((r): Idea => ({ ...r, category: 'Side' }))].map((r) => ({
   name: r.name,
   category: r.category ?? 'Dinner',
   protein: r.protein,
@@ -122,5 +171,6 @@ export const IDEAS: MealDraft[] = RAW.map((r) => ({
   recipe: r.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
   notes: '',
   source: 'idea',
+  style: r.style ?? '',
   ingredients: r.items.map(parseItem),
 }));

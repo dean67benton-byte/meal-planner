@@ -1,4 +1,6 @@
-import type { AppState, KrogerDeal, KrogerProduct, KrogerStatus, Meal, MealDraft, PantryItem, Slot } from './types';
+import type {
+  AppState, KrogerDeal, KrogerPrice, KrogerProduct, KrogerStatus, Meal, MealDraft, PantryItem, Slot, SnackPick,
+} from './types';
 
 const KEY = 'household-key';
 const WHO = 'who-am-i';
@@ -51,6 +53,9 @@ export const api = {
   deletePantry: (key: string) => call('DELETE', `/pantry/${encodeURIComponent(key)}`),
   initWeek: (week: string, slots: Partial<Slot>[]) => call('POST', `/weeks/${week}/init`, slots),
   saveSlots: (week: string, slots: Slot[]) => call('PUT', `/weeks/${week}/slots`, slots),
+  saveSnacks: (week: string, snacks: SnackPick[]) => call('PUT', `/weeks/${week}/snacks`, snacks),
+  sidePair: (meal_id: string, side_id: string, change: { kept?: number; skipped?: number }) =>
+    call('POST', '/side-pairs', { meal_id, side_id, ...change }),
   deleteSlot: (week: string, slot: number) => call('DELETE', `/weeks/${week}/slots/${slot}`),
   eaten: (week: string, slot: number, date: string | null) =>
     call('POST', `/weeks/${week}/slots/${slot}/eaten`, { date, by: getWho() }),
@@ -68,6 +73,7 @@ export const api = {
     locations: (zip: string) => call<{ id: string; name: string }[]>('GET', `/kroger/locations?zip=${zip}`),
     setLocation: (id: string, name: string) => call('PUT', '/kroger/location', { id, name }),
     deals: () => call<KrogerDeal[]>('GET', '/kroger/deals'),
+    prices: (upcs: string[]) => call<KrogerPrice[]>('GET', `/kroger/prices?upcs=${upcs.join(',')}`),
     products: (term: string) => call<KrogerProduct[]>('GET', `/kroger/products?term=${encodeURIComponent(term)}`),
     cart: (items: { upc: string; quantity: number }[]) => call<{ added: number }>('POST', '/kroger/cart', { items }),
   },

@@ -186,7 +186,7 @@ function SettingsSection() {
     const cur = s.slots;
     const next: Slot[] = cfg.map((c, i) => {
       const old = cur.find((x) => x.slot === i);
-      return old ? { ...old, ...c } : { ...c, week_of: s.week_of, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null };
+      return old ? { ...old, ...c } : { ...c, week_of: s.week_of, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [] };
     });
     const extra = cur.filter((x) => x.slot >= cfg.length);
     await store.run(async () => {
@@ -209,7 +209,7 @@ function SettingsSection() {
           <div class="row gap" key={i}>
             <input value={x.label} aria-label="Slot name" onInput={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, label: e.currentTarget.value } : y)))} />
             <select value={x.category} aria-label="Category" onChange={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, category: e.currentTarget.value } : y)))}>
-              {s.settings.categories.map((c) => <option key={c}>{c}</option>)}
+              {s.settings.categories.filter((c) => c !== 'Side').map((c) => <option key={c}>{c}</option>)}
             </select>
             <button type="button" class="icon" aria-label="Remove slot" onClick={() => setSlots(slots.filter((_, n) => n !== i))}><Icon name="trash" size={18} /></button>
           </div>
