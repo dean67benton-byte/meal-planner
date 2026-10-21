@@ -18,5 +18,7 @@
       "migrations_dir": "migrations"
     }
   ],
+  // SHA-256 of the household link code. The code itself is never committed.
+  "vars": { "HOUSEHOLD_KEY_HASH": "3f0a62e0777db3e24892ebb5ea641c626c566d231c11598c53ab27bdb60e7ba4" },
   "observability": { "enabled": true }
 }

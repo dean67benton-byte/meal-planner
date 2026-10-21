@@ -13,6 +13,7 @@ export const json = (data: unknown, status = 200) =>
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  HOUSEHOLD_KEY_HASH?: string;
   ANTHROPIC_API_KEY?: string;
   KROGER_CLIENT_ID?: string;
   KROGER_CLIENT_SECRET?: string;

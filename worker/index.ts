@@ -12,8 +12,10 @@ async function sha256(text: string) {
 
 async function checkKey(req: Request, env: Env) {
   const key = req.headers.get('x-household-key') ?? '';
+  // The hash comes from wrangler.jsonc; a settings row can override it (e.g. for local dev).
   const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'household_key_hash'").first<{ value: string }>();
-  if (!row || !key || JSON.parse(row.value) !== (await sha256(key))) {
+  const expected = row ? (JSON.parse(row.value) as string) : env.HOUSEHOLD_KEY_HASH;
+  if (!expected || !key || expected !== (await sha256(key))) {
     throw new HttpError(401, 'This device needs the household link.');
   }
 }
