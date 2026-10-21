@@ -1,6 +1,6 @@
 // Kroger public API: store search, product search, and "add to cart" for the household's Kroger account.
 // Docs: https://developer.kroger.com/documentation/public/getting-started/quick-start
-import type { KrogerDeal, KrogerProduct, KrogerStatus } from '../src/lib/types';
+import type { KrogerDeal, KrogerPrice, KrogerProduct, KrogerStatus } from '../src/lib/types';
 import { HttpError, json, type Env } from './http';
 
 const API = 'https://api.kroger.com/v1';
@@ -113,6 +113,28 @@ export async function deals(env: Env): Promise<KrogerDeal[]> {
   return found;
 }
 
+/** Today's prices at the household's store for products they've matched (used to find snacks on sale). */
+async function prices(env: Env, upcs: string[]): Promise<KrogerPrice[]> {
+  requireConfig(env);
+  const loc = await getKV(env, 'location');
+  if (!loc || !upcs.length) return [];
+  const cacheKey = `prices:${[...upcs].sort().join(',')}`;
+  const cached = await getKV(env, cacheKey);
+  if (cached) return JSON.parse(cached);
+  const locationId = (JSON.parse(loc) as { id: string }).id;
+  const token = await appToken(env);
+  const r = await krogerGet(token, `/products?filter.productId=${upcs.join(',')}&filter.locationId=${locationId}&filter.limit=50`);
+  const found = r.data.map((p): KrogerPrice => {
+    const price = p.items?.[0]?.price ?? {};
+    return { upc: p.upc, regular: price.regular ?? 0, promo: price.promo > 0 && price.promo < price.regular ? price.promo : 0 };
+  });
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM kroger WHERE key LIKE 'prices:%'"),
+    putKV(env, cacheKey, JSON.stringify(found), 6 * 3600),
+  ]);
+  return found;
+}
+
 export async function callback(env: Env, url: URL) {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state') ?? '';
@@ -182,12 +204,17 @@ export async function route(req: Request, env: Env, url: URL, path: string): Pro
     const b = (await req.json()) as { id: string; name: string };
     await env.DB.batch([
       putKV(env, 'location', JSON.stringify({ id: String(b.id), name: String(b.name).slice(0, 200) })),
-      env.DB.prepare("DELETE FROM kroger WHERE key = 'deals'"),
+      env.DB.prepare("DELETE FROM kroger WHERE key = 'deals' OR key LIKE 'prices:%'"),
     ]);
     return json({ ok: true });
   }
 
   if (path === '/deals' && m === 'GET') return json(await deals(env));
+
+  if (path === '/prices' && m === 'GET') {
+    const upcs = (url.searchParams.get('upcs') ?? '').split(',').filter((u) => /^\d{6,14}$/.test(u)).slice(0, 50);
+    return json(await prices(env, upcs));
+  }
 
   if (path === '/products' && m === 'GET') {
     const term = (url.searchParams.get('term') ?? '').trim().slice(0, 80);

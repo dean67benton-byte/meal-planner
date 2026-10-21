@@ -16,6 +16,8 @@ const PATHS: Record<string, string> = {
   trash: 'M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
   swap: 'M7 7h13l-4-4M17 17H4l4 4',
+  x: 'M6 6l12 12M18 6L6 18',
+  minus: 'M5 12h14',
   chef: 'M7 14v6h10v-6M7 14a4 4 0 1 1 1.5-7.7A4 4 0 0 1 15.5 6 4 4 0 1 1 17 14Z',
 };
 

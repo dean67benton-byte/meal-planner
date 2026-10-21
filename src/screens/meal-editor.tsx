@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { short, today } from '../lib/dates';
-import { readyOn } from '../lib/planner';
+import { isSide, mealStyle, readyOn } from '../lib/planner';
 import { useStore } from '../lib/store';
 import type { Cook, Ingredient, Meal, MealDraft } from '../lib/types';
 import { go } from '../router';
@@ -37,6 +37,7 @@ const toForm = (m: Partial<Meal> | MealDraft): Form => ({
   recipe: m.recipe ?? '',
   notes: m.notes ?? '',
   source: m.source ?? 'manual',
+  style: m.style ?? '',
   archived: 'archived' in m ? m.archived : 0,
   ingredients: m.ingredients?.length ? m.ingredients.map((i) => ({ ...i })) : [{ name: '', qty: null, unit: 'each' }],
 });
@@ -100,14 +101,25 @@ export function MealEditor({ id }: { id: string }) {
       </label>
 
       <div class="field">
-        <span>Who cooks it?</span>
-        <Seg label="Who cooks" value={form.cook} options={['Dean', 'Kinley', 'Either'] as const} onChange={(v) => set('cook', v)} />
-      </div>
-
-      <div class="field">
         <span>Category</span>
         <Seg label="Category" value={form.category} options={s.settings.categories} onChange={(v) => set('category', v)} />
       </div>
+
+      {form.category !== 'Side' && (
+        <div class="field">
+          <span>Who cooks it?</span>
+          <Seg label="Who cooks" value={form.cook} options={['Dean', 'Kinley', 'Either'] as const} onChange={(v) => set('cook', v)} />
+        </div>
+      )}
+
+      <label class="field">
+        <span>Style</span>
+        <select value={form.style} onChange={(e) => set('style', e.currentTarget.value)}>
+          <option value="">{form.category === 'Side' ? 'Goes with anything / work it out' : 'Work it out from the name'}</option>
+          {(s.settings.styles ?? []).map((x) => <option key={x}>{x}</option>)}
+        </select>
+        <span class="small muted">Used to suggest sides that fit, like rice with tacos and mashed potatoes with steak.</span>
+      </label>
 
       <label class="field">
         <span>Protein</span>
@@ -150,10 +162,12 @@ export function MealEditor({ id }: { id: string }) {
         <span>Notes</span>
         <textarea rows={2} value={form.notes} onInput={(e) => set('notes', e.currentTarget.value)} />
       </label>
-      <label class="field">
-        <span>Days before it can repeat</span>
-        <input inputMode="numeric" value={form.repeat_days} placeholder={`Default ${s.settings.repeat_days}`} onInput={(e) => set('repeat_days', e.currentTarget.value)} />
-      </label>
+      {form.category !== 'Side' && (
+        <label class="field">
+          <span>Days before it can repeat</span>
+          <input inputMode="numeric" value={form.repeat_days} placeholder={`Default ${s.settings.repeat_days}`} onInput={(e) => set('repeat_days', e.currentTarget.value)} />
+        </label>
+      )}
       <button class="btn primary wide" disabled={saving}>{saving ? 'Saving…' : 'Save meal'}</button>
     </form>
   );
@@ -176,7 +190,7 @@ function MealView({ meal, onEdit, onArchive }: { meal: Meal; onEdit: () => void;
       </header>
       <h1>{meal.name}</h1>
       <p class="muted">
-        {[meal.category, meal.protein, `${meal.cook === 'Either' ? 'Either of you' : meal.cook} cooks`].filter(Boolean).join(' · ')}
+        {[meal.category, mealStyle(meal), meal.protein, !isSide(meal) && `${meal.cook === 'Either' ? 'Either of you' : meal.cook} cooks`].filter(Boolean).join(' · ')}
       </p>
       <p class="muted small">
         {[
@@ -185,9 +199,10 @@ function MealView({ meal, onEdit, onArchive }: { meal: Meal; onEdit: () => void;
           meal.servings && `serves ${meal.servings}`,
         ].filter(Boolean).join(' · ')}
       </p>
-      <p class="small">
+      {!isSide(meal) && <p class="small">
         {last ? `Last made ${short(last)} (${times}×).` : 'Never made yet.'} {wait ? `Ready again ${short(wait)}.` : 'Ready to plan.'}
-      </p>
+      </p>}
+      <FavouriteSides meal={meal} />
 
       <h2>Ingredients</h2>
       {meal.ingredients.length ? (
@@ -222,5 +237,25 @@ function MealView({ meal, onEdit, onArchive }: { meal: Meal; onEdit: () => void;
         <button class="btn" onClick={() => onArchive(meal.archived ? 0 : 1)}>{meal.archived ? 'Restore' : 'Archive'}</button>
       </div>
     </div>
+  );
+}
+
+/** The sides you keep with this dinner, or for a side, the dinners you have it with. */
+function FavouriteSides({ meal }: { meal: Meal }) {
+  const s = useStore().state!;
+  const side = isSide(meal);
+  const byId = new Map(s.meals.map((m) => [m.id, m]));
+  const top = s.side_pairs
+    .filter((p) => p.kept > 0 && (side ? p.side_id : p.meal_id) === meal.id)
+    .sort((a, b) => b.kept - a.kept)
+    .map((p) => ({ m: byId.get(side ? p.meal_id : p.side_id), n: p.kept }))
+    .filter((x) => x.m)
+    .slice(0, 5);
+  if (!top.length) return null;
+  return (
+    <p class="small">
+      {side ? 'You have it with ' : 'Sides you like with it: '}
+      {top.map((x, i) => <span key={x.m!.id}>{i ? ', ' : ''}<a href={`#/meals/${x.m!.id}`}>{x.m!.name}</a> ({x.n}×)</span>)}
+    </p>
   );
 }

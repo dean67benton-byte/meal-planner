@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { addDays, short, today } from '../lib/dates';
-import { assignCook, cookSplit, fillWeek, reroll, slotWarning, totalMinutes } from '../lib/planner';
+import { assignCook, cookSplit, fillWeek, keepLockedSides, reroll, slotWarning, totalMinutes } from '../lib/planner';
 import { useStore } from '../lib/store';
 import type { Meal, Slot } from '../lib/types';
 import { go } from '../router';
 import { Icon } from '../icons';
 import { CookBadge, Sheet, cookClass } from '../ui';
+import { SidesBlock, SnacksSection } from './extras';
 
 export function WeekScreen() {
   const store = useStore();
@@ -73,6 +74,7 @@ export function WeekScreen() {
                 <p class="slot-meal muted">No meal yet</p>
               )}
               {warn && <p class="warn">{warn}</p>}
+              {meal && x.category === 'Dinner' && <SidesBlock slot={x} />}
               <div class="slot-actions">
                 {x.locked ? (
                   <>
@@ -102,6 +104,8 @@ export function WeekScreen() {
           <button class="btn" onClick={refreshAll}><Icon name="reroll" size={18} /> Fresh suggestions</button>
         </div>
       )}
+      <SnacksSection />
+
       {lockedCount > 0 && (
         <p class="center muted small">
           <a href="#/groceries">Grocery list for locked meals →</a>
@@ -114,7 +118,12 @@ export function WeekScreen() {
           onClose={() => setPicking(null)}
           onPick={(m) => {
             const working = s.slots.map((y) => (y.slot === picking.slot ? { ...y, meal_id: null } : y));
-            update(picking.slot, { meal_id: m.id, locked: 1, cook: assignCook(m, working, picking.slot, s.settings.cooks) });
+            update(picking.slot, {
+              meal_id: m.id,
+              locked: 1,
+              cook: assignCook(m, working, picking.slot, s.settings.cooks),
+              sides: keepLockedSides(picking, m.id),
+            });
             setPicking(null);
           }}
         />

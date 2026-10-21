@@ -1,4 +1,4 @@
-import type { AppState, Ingredient, Meal, PantryItem, Settings, Slot } from '../src/lib/types';
+import type { AppState, Ingredient, Meal, PantryItem, Settings, SidePair, Slot, SnackPick } from '../src/lib/types';
 import { itemKey } from '../src/lib/types';
 import { aiIdeas, aiFromReel } from './ai';
 import * as kroger from './kroger';
@@ -28,7 +28,7 @@ async function body<T>(req: Request): Promise<T> {
   }
 }
 
-const SETTINGS_KEYS = ['slots', 'repeat_days', 'categories', 'proteins', 'stores', 'units', 'cooks'] as const;
+const SETTINGS_KEYS = ['slots', 'repeat_days', 'categories', 'proteins', 'stores', 'units', 'cooks', 'styles'] as const;
 
 async function loadSettings(env: Env): Promise<Settings> {
   const { results } = await env.DB.prepare('SELECT key, value FROM settings').all<{ key: string; value: string }>();
@@ -52,18 +52,30 @@ async function loadMeals(env: Env): Promise<Meal[]> {
 }
 
 function parseSlot(row: Record<string, unknown>): Slot {
-  return { ...(row as unknown as Slot), skipped: JSON.parse((row.skipped as string) || '[]') };
+  return {
+    ...(row as unknown as Slot),
+    skipped: JSON.parse((row.skipped as string) || '[]'),
+    sides: JSON.parse((row.sides as string) || '[]'),
+  };
 }
 
 async function loadState(env: Env, weekOf: string): Promise<AppState> {
   const [settings, meals] = await Promise.all([loadSettings(env), loadMeals(env)]);
-  const [pantry, slots, last, history, checks] = await env.DB.batch([
+  const [pantry, slots, last, history, checks, week, prev, counts, pairs] = await env.DB.batch([
     env.DB.prepare('SELECT * FROM pantry_items ORDER BY name COLLATE NOCASE'),
     env.DB.prepare('SELECT * FROM week_slots WHERE week_of = ? ORDER BY slot').bind(weekOf),
     env.DB.prepare('SELECT meal_id, MAX(date) AS date FROM history WHERE meal_id IS NOT NULL GROUP BY meal_id'),
     env.DB.prepare('SELECT * FROM history ORDER BY date DESC, id DESC LIMIT 200'),
     env.DB.prepare('SELECT key, bought FROM grocery_checks WHERE week_of = ?').bind(weekOf),
+    env.DB.prepare('SELECT snacks FROM weeks WHERE week_of = ?').bind(weekOf),
+    env.DB.prepare("SELECT snacks FROM weeks WHERE week_of < ? AND snacks <> '[]' ORDER BY week_of DESC LIMIT 1").bind(weekOf),
+    env.DB.prepare(
+      `SELECT json_extract(j.value, '$.key') AS key, COUNT(*) AS n FROM weeks w, json_each(w.snacks) j
+       WHERE w.week_of <> ? AND json_extract(j.value, '$.locked') = 1 GROUP BY 1`,
+    ).bind(weekOf),
+    env.DB.prepare('SELECT * FROM side_pairs'),
   ]);
+  const snacksOf = (r: D1Result) => JSON.parse((r.results[0] as { snacks?: string } | undefined)?.snacks || '[]') as SnackPick[];
   return {
     settings,
     meals,
@@ -73,6 +85,10 @@ async function loadState(env: Env, weekOf: string): Promise<AppState> {
     last_eaten: Object.fromEntries((last.results as { meal_id: string; date: string }[]).map((r) => [r.meal_id, r.date])),
     history: history.results as unknown as AppState['history'],
     checks: Object.fromEntries((checks.results as { key: string; bought: number }[]).map((r) => [r.key, r.bought])),
+    snacks: snacksOf(week),
+    prev_snacks: snacksOf(prev),
+    snack_counts: Object.fromEntries((counts.results as { key: string; n: number }[]).map((r) => [r.key, r.n])),
+    side_pairs: pairs.results as unknown as SidePair[],
     features: { ai: !!env.ANTHROPIC_API_KEY, kroger: !!(env.KROGER_CLIENT_ID && env.KROGER_CLIENT_SECRET) },
   };
 }
@@ -89,14 +105,15 @@ async function saveMeal(env: Env, input: Partial<Meal>) {
   const ingredients = (input.ingredients ?? []).filter((i) => str(i.name));
   const stmts = [
     env.DB.prepare(
-      `INSERT INTO meals (id, name, category, protein, cook, servings, prep_min, cook_min, repeat_days, recipe, notes, source, archived)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+      `INSERT INTO meals (id, name, category, protein, cook, servings, prep_min, cook_min, repeat_days, recipe, notes, source, archived, style)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
        ON CONFLICT(id) DO UPDATE SET name=?2, category=?3, protein=?4, cook=?5, servings=?6, prep_min=?7, cook_min=?8,
-         repeat_days=?9, recipe=?10, notes=?11, archived=?13`,
+         repeat_days=?9, recipe=?10, notes=?11, archived=?13, style=?14`,
     ).bind(
       id, name, str(input.category, 50) || 'Dinner', str(input.protein, 50), cook,
       intOrNull(input.servings), intOrNull(input.prep_min), intOrNull(input.cook_min), intOrNull(input.repeat_days),
       str(input.recipe, 20000), str(input.notes), str(input.source, 20) || 'manual', input.archived ? 1 : 0,
+      str(input.style, 30),
     ),
     env.DB.prepare('DELETE FROM meal_ingredients WHERE meal_id = ?').bind(id),
     ...ingredients.map((i, n) =>
@@ -120,26 +137,27 @@ async function savePantry(env: Env, p: Partial<PantryItem>) {
   if (!name) throw new HttpError(400, 'Ingredient name is required');
   const key = p.key || itemKey(name, unit);
   await env.DB.prepare(
-    `INSERT INTO pantry_items (key, name, unit, store, price, staple, restock, on_hand, kroger_upc, kroger_desc)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+    `INSERT INTO pantry_items (key, name, unit, store, price, staple, restock, on_hand, kroger_upc, kroger_desc, snack)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
      ON CONFLICT(key) DO UPDATE SET name=?2, unit=?3, store=?4, price=?5, staple=?6, restock=?7, on_hand=?8,
-       kroger_upc=?9, kroger_desc=?10`,
+       kroger_upc=?9, kroger_desc=?10, snack=?11`,
   )
     .bind(
       key, name, unit, str(p.store, 30) || 'Kroger', numOrNull(p.price), p.staple ? 1 : 0, p.restock ? 1 : 0,
-      numOrNull(p.on_hand) ?? 0, p.kroger_upc || null, p.kroger_desc || null,
+      numOrNull(p.on_hand) ?? 0, p.kroger_upc || null, p.kroger_desc || null, p.snack ? 1 : 0,
     )
     .run();
 }
 
 const slotUpdate = (env: Env, s: Slot) =>
   env.DB.prepare(
-    `INSERT INTO week_slots (week_of, slot, label, category, meal_id, locked, cook, skipped, eaten_date)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-     ON CONFLICT(week_of, slot) DO UPDATE SET label=?3, category=?4, meal_id=?5, locked=?6, cook=?7, skipped=?8, eaten_date=?9`,
+    `INSERT INTO week_slots (week_of, slot, label, category, meal_id, locked, cook, skipped, eaten_date, sides)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+     ON CONFLICT(week_of, slot) DO UPDATE SET label=?3, category=?4, meal_id=?5, locked=?6, cook=?7, skipped=?8, eaten_date=?9,
+       sides=?10`,
   ).bind(
     s.week_of, s.slot, str(s.label, 50), str(s.category, 50), s.meal_id || null, s.locked ? 1 : 0, s.cook || null,
-    JSON.stringify(s.skipped ?? []), s.eaten_date || null,
+    JSON.stringify(s.skipped ?? []), s.eaten_date || null, JSON.stringify(s.sides ?? []),
   );
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -202,6 +220,34 @@ async function api(req: Request, env: Env, url: URL): Promise<Response> {
   match = path.match(/^\/weeks\/(\d{4}-\d{2}-\d{2})\/slots\/(\d+)$/);
   if (match && m === 'DELETE') {
     await env.DB.prepare('DELETE FROM week_slots WHERE week_of = ? AND slot = ?').bind(match[1], Number(match[2])).run();
+    return json({ ok: true });
+  }
+
+  match = path.match(/^\/weeks\/(\d{4}-\d{2}-\d{2})\/snacks$/);
+  if (match && m === 'PUT') {
+    const snacks = (await body<SnackPick[]>(req)).map((x) => ({
+      key: str(x.key, 140),
+      qty: Math.max(1, Math.round(Number(x.qty) || 1)),
+      locked: x.locked ? 1 : 0,
+      skipped: (x.skipped ?? []).map((k) => str(k, 140)).slice(-50),
+    }));
+    await env.DB.prepare('INSERT INTO weeks (week_of, snacks) VALUES (?1, ?2) ON CONFLICT(week_of) DO UPDATE SET snacks = ?2')
+      .bind(match[1], JSON.stringify(snacks))
+      .run();
+    return json({ ok: true });
+  }
+
+  // Learn which sides go with which meals: +1 kept when a side is locked in (-1 when unlocked), +1 skipped on reroll.
+  if (path === '/side-pairs' && m === 'POST') {
+    const b = await body<{ meal_id: string; side_id: string; kept?: number; skipped?: number }>(req);
+    const kept = Math.sign(Number(b.kept) || 0);
+    const skipped = Math.sign(Number(b.skipped) || 0);
+    await env.DB.prepare(
+      `INSERT INTO side_pairs (meal_id, side_id, kept, skipped) VALUES (?1, ?2, max(?3, 0), max(?4, 0))
+       ON CONFLICT(meal_id, side_id) DO UPDATE SET kept = max(kept + ?3, 0), skipped = max(skipped + ?4, 0)`,
+    )
+      .bind(str(b.meal_id, 60), str(b.side_id, 60), kept, skipped)
+      .run();
     return json({ ok: true });
   }
 
