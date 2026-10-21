@@ -51,12 +51,21 @@ async function loadMeals(env: Env): Promise<Meal[]> {
   return (meals.results as Omit<Meal, 'ingredients'>[]).map((m) => ({ ...m, ingredients: byMeal.get(m.id) ?? [] }));
 }
 
+/** A JSON list column, tolerating a list that was saved double-encoded or not as a list. */
+function jsonList<T>(v: unknown): T[] {
+  let out: unknown = v ?? '[]';
+  for (let i = 0; i < 3 && typeof out === 'string'; i++) {
+    try {
+      out = JSON.parse(out);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(out) ? (out as T[]) : [];
+}
+
 function parseSlot(row: Record<string, unknown>): Slot {
-  return {
-    ...(row as unknown as Slot),
-    skipped: JSON.parse((row.skipped as string) || '[]'),
-    sides: JSON.parse((row.sides as string) || '[]'),
-  };
+  return { ...(row as unknown as Slot), skipped: jsonList(row.skipped), sides: jsonList(row.sides) };
 }
 
 async function loadState(env: Env, weekOf: string): Promise<AppState> {
@@ -75,7 +84,7 @@ async function loadState(env: Env, weekOf: string): Promise<AppState> {
     ).bind(weekOf),
     env.DB.prepare('SELECT * FROM side_pairs'),
   ]);
-  const snacksOf = (r: D1Result) => JSON.parse((r.results[0] as { snacks?: string } | undefined)?.snacks || '[]') as SnackPick[];
+  const snacksOf = (r: D1Result) => jsonList<SnackPick>((r.results[0] as { snacks?: string } | undefined)?.snacks);
   return {
     settings,
     meals,
@@ -157,7 +166,7 @@ const slotUpdate = (env: Env, s: Slot) =>
        sides=?10`,
   ).bind(
     s.week_of, s.slot, str(s.label, 50), str(s.category, 50), s.meal_id || null, s.locked ? 1 : 0, s.cook || null,
-    JSON.stringify(s.skipped ?? []), s.eaten_date || null, JSON.stringify(s.sides ?? []),
+    JSON.stringify(jsonList(s.skipped)), s.eaten_date || null, JSON.stringify(jsonList(s.sides)),
   );
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -225,11 +234,11 @@ async function api(req: Request, env: Env, url: URL): Promise<Response> {
 
   match = path.match(/^\/weeks\/(\d{4}-\d{2}-\d{2})\/snacks$/);
   if (match && m === 'PUT') {
-    const snacks = (await body<SnackPick[]>(req)).map((x) => ({
+    const snacks = jsonList<SnackPick>(await body<unknown>(req)).map((x) => ({
       key: str(x.key, 140),
       qty: Math.max(1, Math.round(Number(x.qty) || 1)),
       locked: x.locked ? 1 : 0,
-      skipped: (x.skipped ?? []).map((k) => str(k, 140)).slice(-50),
+      skipped: jsonList<string>(x.skipped).map((k) => str(k, 140)).slice(-50),
     }));
     await env.DB.prepare('INSERT INTO weeks (week_of, snacks) VALUES (?1, ?2) ON CONFLICT(week_of) DO UPDATE SET snacks = ?2')
       .bind(match[1], JSON.stringify(snacks))
