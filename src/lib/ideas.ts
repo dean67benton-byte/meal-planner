@@ -1,0 +1,126 @@
+// Starter idea bank: quick (about 30 minutes or less), 10 or fewer ingredients, everyday Kroger groceries.
+// Salt, pepper, and oil are assumed on hand. Each idea can be added to the library in one tap.
+import type { Ingredient, MealDraft } from './types';
+
+interface Idea {
+  name: string;
+  category?: 'Dinner' | 'Work Lunch';
+  protein: string;
+  prep: number;
+  cook: number;
+  serves?: number;
+  items: string[]; // "qty unit name"
+  steps: string[];
+}
+
+const RAW: Idea[] = [
+  { name: 'Sheet-Pan Chicken Fajitas', protein: 'Chicken', prep: 10, cook: 20,
+    items: ['1.5 lb Chicken breast', '3 each Bell pepper', '1 each Yellow onion', '1 pkg Fajita seasoning', '1 pkg Flour tortillas', '1 cup Shredded cheese', '1 jar Salsa'],
+    steps: ['Heat oven to 425°F.', 'Slice chicken, peppers, and onion; toss with oil and seasoning on a sheet pan.', 'Roast 20 minutes, stirring once.', 'Serve in warm tortillas with cheese and salsa.'] },
+  { name: 'Ground Beef Taco Bowls', protein: 'Beef / Deer', prep: 5, cook: 15,
+    items: ['1 lb Ground beef', '1 pkg Taco seasoning', '1 cup Rice', '1 can Black beans', '1 can Corn', '1 jar Salsa', '1 cup Shredded cheese'],
+    steps: ['Cook rice.', 'Brown beef, drain, add taco seasoning and water per packet.', 'Warm beans and corn.', 'Build bowls: rice, beef, beans, corn, salsa, cheese.'] },
+  { name: 'Honey Garlic Pork Chops', protein: 'Pork', prep: 5, cook: 15,
+    items: ['4 each Boneless pork chops', '0.25 cup Honey', '3 tbsp Soy sauce', '4 clove Garlic', '1 bag Steam-in-bag green beans'],
+    steps: ['Season chops; sear 4–5 minutes per side.', 'Stir honey, soy sauce, and minced garlic; pour in and simmer 2 minutes until glossy.', 'Microwave green beans and serve.'] },
+  { name: 'Chicken Alfredo Pasta', protein: 'Chicken', prep: 5, cook: 20,
+    items: ['1 lb Chicken breast', '1 box Fettuccine', '1 jar Alfredo sauce', '1 bag Frozen broccoli', '0.5 cup Parmesan'],
+    steps: ['Boil pasta; add broccoli for the last 3 minutes.', 'Cook bite-size chicken in a skillet until done.', 'Add sauce, drained pasta, and broccoli; toss with parmesan.'] },
+  { name: 'Shrimp Fried Rice', protein: 'Seafood', prep: 10, cook: 15,
+    items: ['1 lb Frozen shrimp', '2 cup Rice', '1 bag Frozen peas and carrots', '3 each Eggs', '3 tbsp Soy sauce', '1 bunch Green onions'],
+    steps: ['Cook rice (day-old is best).', 'Sauté shrimp until pink; set aside.', 'Scramble eggs, add veggies and rice, then soy sauce.', 'Stir in shrimp and sliced green onions.'] },
+  { name: 'Slow-Cooker Salsa Chicken', protein: 'Chicken', prep: 5, cook: 240,
+    items: ['2 lb Chicken breast', '1 jar Salsa', '1 pkg Taco seasoning', '1 pkg Flour tortillas', '1 cup Shredded cheese'],
+    steps: ['Put chicken, salsa, and seasoning in the slow cooker.', 'Cook on high 4 hours (or low 6–7).', 'Shred and serve in tortillas with cheese. 5 minutes of real work.'] },
+  { name: 'Spaghetti with Meat Sauce', protein: 'Beef / Deer', prep: 5, cook: 20,
+    items: ['1 lb Ground beef', '1 box Spaghetti', '1 jar Marinara sauce', '1 each Yellow onion', '0.5 cup Parmesan', '1 bag Salad kit'],
+    steps: ['Boil spaghetti.', 'Brown beef with diced onion; drain.', 'Add marinara and simmer 10 minutes.', 'Serve over pasta with parmesan and the salad kit.'] },
+  { name: 'Teriyaki Chicken Rice Bowls', protein: 'Chicken', prep: 5, cook: 20,
+    items: ['1.5 lb Chicken thighs', '1 cup Rice', '1 jar Teriyaki sauce', '1 bag Frozen stir-fry vegetables', '1 bunch Green onions'],
+    steps: ['Cook rice.', 'Cook chicken pieces until browned and done.', 'Add vegetables until hot, then teriyaki sauce.', 'Serve over rice with green onions.'] },
+  { name: 'Kielbasa & Potato Skillet', protein: 'Pork', prep: 10, cook: 20,
+    items: ['1 pkg Kielbasa', '1.5 lb Baby potatoes', '1 each Yellow onion', '2 each Bell pepper', '1 tsp Paprika'],
+    steps: ['Halve potatoes and microwave 5 minutes to par-cook.', 'Brown sliced kielbasa; add potatoes, onion, and peppers.', 'Cook 12–15 minutes until crisp; season with paprika.'] },
+  { name: 'Black Bean Quesadillas', protein: 'Vegetarian', prep: 5, cook: 15,
+    items: ['1 can Black beans', '1 can Corn', '1 pkg Flour tortillas', '2 cup Shredded cheese', '1 jar Salsa', '1 each Sour cream'],
+    steps: ['Mash half the beans; mix in the rest with corn.', 'Fill tortillas with beans and cheese; fold.', 'Cook in a skillet 2–3 minutes per side.', 'Serve with salsa and sour cream.'] },
+  { name: 'Lemon Garlic Salmon & Asparagus', protein: 'Seafood', prep: 5, cook: 15,
+    items: ['1.25 lb Salmon fillets', '1 bunch Asparagus', '1 each Lemon', '3 clove Garlic', '2 tbsp Butter'],
+    steps: ['Heat oven to 400°F.', 'Put salmon and asparagus on a sheet pan; top with butter, garlic, and lemon slices.', 'Roast 12–15 minutes.'] },
+  { name: 'Cheeseburger Sliders', protein: 'Beef / Deer', prep: 10, cook: 20,
+    items: ['1 lb Ground beef', '1 pkg Hawaiian rolls', '6 slice American cheese', '1 each Yellow onion', '2 tbsp Butter', '1 bag Frozen fries'],
+    steps: ['Bake fries per bag.', 'Brown beef with diced onion; drain.', 'Split the rolls as one slab, add beef and cheese, then put the tops on.', 'Brush with melted butter; bake at 350°F for 10 minutes.'] },
+  { name: 'Chicken Caesar Wraps', category: 'Work Lunch', protein: 'Chicken', prep: 10, cook: 0,
+    items: ['1 each Rotisserie chicken', '1 bag Caesar salad kit', '1 pkg Flour tortillas'],
+    steps: ['Shred the rotisserie chicken.', 'Toss the salad kit with chicken.', 'Roll into tortillas; wrap in foil for the week.'] },
+  { name: 'Turkey & Cheese Pinwheels', category: 'Work Lunch', protein: 'Other', prep: 10, cook: 0,
+    items: ['1 lb Sliced deli turkey', '1 pkg Flour tortillas', '1 each Cream cheese', '1 bag Spinach', '8 slice Provolone'],
+    steps: ['Spread cream cheese on tortillas.', 'Layer turkey, provolone, and spinach.', 'Roll tightly, slice, and pack.'] },
+  { name: 'Burrito Bowl Meal Prep', category: 'Work Lunch', protein: 'Chicken', prep: 10, cook: 20,
+    items: ['1.5 lb Chicken thighs', '1 pkg Taco seasoning', '1.5 cup Rice', '1 can Black beans', '1 can Corn', '1 jar Salsa'],
+    steps: ['Cook rice.', 'Season and cook chicken; chop.', 'Divide rice, chicken, beans, and corn into containers; salsa on the side.'] },
+  { name: 'Italian Pasta Salad', category: 'Work Lunch', protein: 'Pork', prep: 15, cook: 10,
+    items: ['1 box Rotini', '1 pkg Sliced pepperoni', '1 each Cucumber', '1 pint Cherry tomatoes', '1 bottle Italian dressing', '1 cup Mozzarella pearls'],
+    steps: ['Boil pasta; rinse cold.', 'Chop cucumber, halve tomatoes, quarter pepperoni.', 'Toss everything with dressing; keeps 4 days.'] },
+  { name: 'Chicken Stir-Fry Noodles', protein: 'Chicken', prep: 10, cook: 15,
+    items: ['1 lb Chicken breast', '1 pkg Lo mein noodles', '1 bag Frozen stir-fry vegetables', '0.5 cup Stir-fry sauce', '2 clove Garlic'],
+    steps: ['Cook noodles.', 'Stir-fry sliced chicken with garlic until done.', 'Add vegetables, noodles, and sauce; toss 2 minutes.'] },
+  { name: 'BBQ Pulled Pork Sandwiches', protein: 'Pork', prep: 5, cook: 300,
+    items: ['2.5 lb Pork shoulder', '1 bottle BBQ sauce', '1 pkg Hamburger buns', '1 bag Coleslaw mix', '0.5 cup Coleslaw dressing'],
+    steps: ['Slow-cook the pork with half the BBQ sauce on low 8 hours or high 5.', 'Shred and stir in the remaining sauce.', 'Toss slaw mix with dressing; pile onto buns.'] },
+  { name: 'Breakfast for Dinner: Egg Scramble', protein: 'Other', prep: 5, cook: 15,
+    items: ['8 each Eggs', '1 pkg Breakfast sausage', '1 bag Frozen hash browns', '1 cup Shredded cheese', '1 each Bell pepper'],
+    steps: ['Crisp hash browns in a skillet.', 'Brown sausage with diced pepper.', 'Add beaten eggs and scramble; top with cheese.'] },
+  { name: 'Creamy Tuscan Chicken', protein: 'Chicken', prep: 5, cook: 20,
+    items: ['1.5 lb Chicken breast', '1 cup Heavy cream', '1 bag Spinach', '0.5 cup Sun-dried tomatoes', '0.5 cup Parmesan', '3 clove Garlic', '1 box Penne'],
+    steps: ['Boil penne.', 'Sear thin chicken cutlets 5 minutes per side; set aside.', 'Sauté garlic and tomatoes, add cream and parmesan, then spinach.', 'Return chicken; serve over pasta.'] },
+  { name: 'Beef & Broccoli', protein: 'Beef / Deer', prep: 10, cook: 15,
+    items: ['1 lb Flank steak', '1 bag Frozen broccoli', '0.33 cup Soy sauce', '2 tbsp Brown sugar', '1 tbsp Cornstarch', '3 clove Garlic', '1 cup Rice'],
+    steps: ['Cook rice.', 'Thin-slice steak; toss with cornstarch and sear in batches.', 'Add broccoli and garlic, then soy sauce and brown sugar.', 'Simmer 2 minutes; serve over rice.'] },
+  { name: 'Baked Potato Bar', protein: 'Vegetarian', prep: 5, cook: 15,
+    items: ['4 each Russet potatoes', '1 cup Shredded cheese', '1 each Sour cream', '1 bag Frozen broccoli', '1 bunch Green onions'],
+    steps: ['Pierce potatoes; microwave 10–12 minutes, turning once.', 'Steam broccoli.', 'Load with cheese, broccoli, sour cream, and green onions.'] },
+  { name: 'Chili Mac', protein: 'Beef / Deer', prep: 5, cook: 20,
+    items: ['1 lb Ground beef', '1 box Elbow macaroni', '1 can Diced tomatoes', '1 can Kidney beans', '1 pkg Chili seasoning', '1 cup Shredded cheese'],
+    steps: ['Brown beef; drain.', 'Add tomatoes, beans, seasoning, 2 cups water, and macaroni.', 'Simmer covered 12 minutes until pasta is tender; top with cheese.'] },
+  { name: 'Fish Tacos', protein: 'Seafood', prep: 10, cook: 15,
+    items: ['1 box Frozen breaded fish fillets', '1 pkg Corn tortillas', '1 bag Coleslaw mix', '1 each Lime', '0.5 cup Sour cream', '1 jar Salsa'],
+    steps: ['Bake fish per box; cut into strips.', 'Mix sour cream with lime juice.', 'Fill tortillas with fish, slaw, lime crema, and salsa.'] },
+  { name: 'Chicken Parmesan Bake', protein: 'Chicken', prep: 10, cook: 25,
+    items: ['1 bag Frozen breaded chicken patties', '1 jar Marinara sauce', '1.5 cup Mozzarella', '1 box Spaghetti', '0.25 cup Parmesan'],
+    steps: ['Heat oven to 400°F.', 'Lay patties in a dish; top with marinara and mozzarella.', 'Bake 25 minutes while spaghetti boils.', 'Serve with parmesan.'] },
+  { name: 'Sausage & Peppers Hoagies', protein: 'Pork', prep: 5, cook: 20,
+    items: ['1 pkg Italian sausage links', '2 each Bell pepper', '1 each Yellow onion', '1 pkg Hoagie rolls', '4 slice Provolone'],
+    steps: ['Brown sausages; add sliced peppers and onion.', 'Cover and cook 12 minutes until sausage is done.', 'Load into rolls with provolone; toast 2 minutes.'] },
+  { name: 'Veggie Fried Rice', protein: 'Vegetarian', prep: 10, cook: 15,
+    items: ['2 cup Rice', '1 bag Frozen peas and carrots', '4 each Eggs', '3 tbsp Soy sauce', '1 bunch Green onions'],
+    steps: ['Cook rice ahead (cold rice fries best).', 'Scramble eggs; set aside.', 'Fry veggies and rice, add soy sauce, fold in eggs and onions.'] },
+  { name: 'Greek Chicken Bowls', category: 'Work Lunch', protein: 'Chicken', prep: 15, cook: 20,
+    items: ['1.5 lb Chicken thighs', '1 cup Rice', '1 each Cucumber', '1 pint Cherry tomatoes', '1 each Tzatziki', '0.5 cup Feta', '1 bottle Greek dressing'],
+    steps: ['Marinate chicken in some dressing; cook 6 minutes per side.', 'Cook rice; chop cucumber and tomatoes.', 'Pack rice, sliced chicken, veggies, and feta; tzatziki on the side.'] },
+  { name: 'Smash Burger Tacos', protein: 'Beef / Deer', prep: 5, cook: 15,
+    items: ['1 lb Ground beef', '1 pkg Flour tortillas', '6 slice American cheese', '1 head Iceberg lettuce', '1 each Pickles', '0.5 cup Burger sauce'],
+    steps: ['Press a thin layer of beef onto each tortilla.', 'Cook beef-side down 3 minutes, flip, add cheese.', 'Top with lettuce, pickles, and sauce; fold.'] },
+  { name: 'Chicken Noodle Soup (Quick)', protein: 'Chicken', prep: 10, cook: 20,
+    items: ['1 each Rotisserie chicken', '2 each Carton chicken broth', '1 bag Egg noodles', '1 bag Diced onion, celery & carrot mix'],
+    steps: ['Sauté the veggie mix 5 minutes.', 'Add broth; bring to a boil.', 'Add noodles 8 minutes, then shredded chicken.'] },
+];
+
+function parseItem(s: string): Ingredient {
+  const [qty, unit, ...rest] = s.split(' ');
+  return { qty: Number(qty), unit, name: rest.join(' ') };
+}
+
+export const IDEAS: MealDraft[] = RAW.map((r) => ({
+  name: r.name,
+  category: r.category ?? 'Dinner',
+  protein: r.protein,
+  cook: 'Either',
+  servings: r.serves ?? 4,
+  prep_min: r.prep,
+  cook_min: r.cook,
+  recipe: r.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
+  notes: '',
+  source: 'idea',
+  ingredients: r.items.map(parseItem),
+}));
