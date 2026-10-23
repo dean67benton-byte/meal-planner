@@ -2,8 +2,8 @@
 
 Dean and Kinley's weekly meal planner. It replaces the "Household Meal Planner" spreadsheet and works on phones and computers.
 
-- **Week**: suggestions for each slot (3 dinners and a work lunch by default). Lock in the meals you want, reroll the rest, or pick one yourself. The cooking is split between Dean and Kinley, and you can tap the cook badge to swap. Mark a meal eaten and it goes into history. Each dinner can have sides (tap "Add side" for a suggestion, then lock, reroll, or pick), and the optional Snacks list has the same lock, reroll, and pick, with a running price total.
-- **Meals**: your library. Each meal has who cooks it (Dean, Kinley, or Either), a category, a protein, times, and ingredients. **Import** saves an Instagram, TikTok, or YouTube link to a list. Then tell Claude (in the Claude project) "Import my reels": Claude watches each video, adds the recipe to Meals, and clears the list. It costs nothing to run. The screen also opens at `#/import?url=<link>`, so an iPhone Shortcut can fill in the link.
+- **Week**: suggestions for each slot (3 dinners and a work lunch by default). Dessert and Snack are optional: tap "Add dessert" or "Add snack recipe" for a suggestion from those meals, or leave them off. They don't count toward the cooking split, and Remove takes them off again. Lock in the meals you want, reroll the rest, or pick one yourself. The cooking is split between Dean and Kinley, and you can tap the cook badge to swap. Mark a meal eaten and it goes into history. Each dinner can have sides (tap "Add side" for a suggestion, then lock, reroll, or pick), and the optional Snacks list has the same lock, reroll, and pick, with a running price total.
+- **Meals**: your library. Each meal has who cooks it (Dean, Kinley, or Either), a category, a protein, times, and ingredients. A meal nobody has marked eaten yet shows a **NEW** badge. **Import** saves an Instagram, TikTok, or YouTube link to a list. Then tell Claude (in the Claude project) "Import my reels": Claude watches each video, adds the recipe to Meals, and clears the list. It costs nothing to run. The screen also opens at `#/import?url=<link>`, so an iPhone Shortcut can fill in the link.
 - **Ideas**: 30 starter meals and 21 starter sides (quick, 10 or fewer ingredients, cheap), Claude meal ideas, a link to Import, and this week's Kroger sales.
 - **Groceries**: ingredients from the locked meals, added up and grouped by store, with whatever's on hand subtracted. Check items off, or send the Kroger ones to your Kroger cart.
 - **More**: household link, Kroger connection, meal history, and settings.
@@ -15,6 +15,8 @@ Dean and Kinley's weekly meal planner. It replaces the "Household Meal Planner" 
 3. Dinners prefer a protein the other dinners aren't using.
 4. Each cook gets about half the week. "Either" meals go to whoever has fewer.
 5. Never-made meals come first, then the one made longest ago, then the quickest.
+
+Dessert and Snack slots use rules 1, 2, and 5. A week has them only when you add them.
 
 Changing a dinner's meal drops its unlocked sides.
 

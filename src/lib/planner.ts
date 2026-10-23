@@ -5,6 +5,8 @@
 //  4. Prefer a meal whose cook keeps the week split fairly between Dean and Kinley.
 //  5. Never-eaten meals first, then the one eaten longest ago. Ties go to the quicker meal.
 // Rerolling adds the current meal to the slot's "skipped" list and picks again.
+// Dessert and Snack slots are optional: a week has none until someone taps "Add dessert" or "Add snack recipe",
+// and they don't count toward the cooking split.
 import type { AppState, KrogerPrice, Meal, PantryItem, Settings, Slot, SnackPick } from './types';
 import { addDays } from './dates';
 
@@ -28,9 +30,18 @@ export function readyOn(m: Meal, state: PlanData, weekOf: string) {
 
 type PlanData = Pick<AppState, 'meals' | 'settings' | 'last_eaten'>;
 
+/** Categories that get a slot only when asked for, numbered after the regular slots. */
+export const OPTIONAL_SLOTS = ['Dessert', 'Snack'] as const;
+/** Slot label; "Snack recipe" keeps it apart from the store-bought Snacks list. */
+export const optionalLabel = (c: (typeof OPTIONAL_SLOTS)[number]) => (c === 'Snack' ? 'Snack recipe' : c);
+export const isOptional = (s: { category: string }) => (OPTIONAL_SLOTS as readonly string[]).includes(s.category);
+
+/** A meal nobody has marked eaten yet. */
+export const isNew = (m: Meal, state: Pick<AppState, 'last_eaten'>) => !state.last_eaten[m.id];
+
 function cookCounts(slots: Slot[], skip: number, cooks: string[]) {
   const counts: Record<string, number> = Object.fromEntries(cooks.map((c) => [c, 0]));
-  for (const s of slots) if (s.slot !== skip && s.meal_id && s.cook && s.cook in counts) counts[s.cook]++;
+  for (const s of slots) if (s.slot !== skip && !isOptional(s) && s.meal_id && s.cook && s.cook in counts) counts[s.cook]++;
   return counts;
 }
 
@@ -51,7 +62,7 @@ export function suggest(state: PlanData, weekOf: string, slots: Slot[], slotNo: 
     others.filter((s) => s.category === 'Dinner').map((s) => byId.get(s.meal_id!)?.protein).filter(Boolean),
   );
   const counts = cookCounts(slots, slotNo, cooks);
-  const cap = Math.ceil(slots.length / Math.max(cooks.length, 1));
+  const cap = Math.ceil(slots.filter((s) => !isOptional(s)).length / Math.max(cooks.length, 1));
 
   const pool = state.meals.filter((m) => !m.archived && m.category === slot.category && !usedIds.has(m.id));
   if (!pool.length) {
@@ -81,7 +92,18 @@ export function suggest(state: PlanData, weekOf: string, slots: Slot[], slotNo: 
   const wait = readyOn(m, state, weekOf);
   if (wait) warnings.push(`Eaten recently. Normally waits until ${wait}.`);
   if (choice.r[1]) warnings.push('Same protein as another dinner (no other option).');
-  return { meal_id: m.id, cook: assignCook(m, slots, slotNo, cooks), warning: warnings.join(' ') || null };
+  return { meal_id: m.id, cook: isOptional(slot) ? null : assignCook(m, slots, slotNo, cooks), warning: warnings.join(' ') || null };
+}
+
+/** Adds an optional slot (Dessert or Snack) to the week with a suggestion in it. */
+export function addOptionalSlot(state: PlanData, weekOf: string, slots: Slot[], category: (typeof OPTIONAL_SLOTS)[number]): Slot[] {
+  const slot: Slot = {
+    week_of: weekOf, slot: 100 + OPTIONAL_SLOTS.indexOf(category), label: optionalLabel(category), category,
+    meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [],
+  };
+  const next = [...slots, slot];
+  const p = suggest(state, weekOf, next, slot.slot);
+  return next.map((x) => (x.slot === slot.slot ? { ...x, meal_id: p.meal_id } : x));
 }
 
 /** When a dinner's meal changes, sides picked for the old meal go unless they were locked in. */

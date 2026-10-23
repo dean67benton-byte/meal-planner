@@ -137,6 +137,7 @@ fieldset.field { display: block; }
 .cook { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--either-soft); color: var(--either); }
 .cook-dean { background: var(--dean-soft); color: var(--dean); }
 .cook-kinley { background: var(--kinley-soft); color: var(--kinley); }
+.new-badge { display: inline-block; vertical-align: middle; font-size: 0.65rem; font-weight: 800; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
 
 /* Week */
 .slots { display: grid; gap: 12px; margin-bottom: 14px; }

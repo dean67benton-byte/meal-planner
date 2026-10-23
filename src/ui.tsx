@@ -43,6 +43,9 @@ export function Seg<T extends string>({ value, options, onChange, label }: {
 
 export const cookClass = (c: string | null | undefined) => `cook cook-${(c ?? 'either').toLowerCase()}`;
 
+/** Marks a meal nobody has cooked yet. */
+export const NewBadge = () => <span class="new-badge">NEW</span>;
+
 export function CookBadge({ cook }: { cook: string | null | undefined }) {
   return <span class={cookClass(cook)}>{cook ?? 'Either'}</span>;
 }

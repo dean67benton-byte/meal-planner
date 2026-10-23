@@ -1,9 +1,9 @@
 import { useState } from 'preact/hooks';
 import { short } from '../lib/dates';
-import { readyOn, totalMinutes } from '../lib/planner';
+import { isNew, readyOn, totalMinutes } from '../lib/planner';
 import { useStore } from '../lib/store';
 import { Icon } from '../icons';
-import { CookBadge, Seg } from '../ui';
+import { CookBadge, NewBadge, Seg } from '../ui';
 import { MealMeta } from './week';
 
 type Sort = 'A–Z' | 'Quickest' | 'Longest ago';
@@ -59,7 +59,7 @@ export function MealsScreen() {
             <li key={m.id}>
               <a class="list-item card" href={`#/meals/${m.id}`}>
                 <span class="row between">
-                  <span class="meal-name">{m.name}</span>
+                  <span class="meal-name">{m.name} {isNew(m, s) && <NewBadge />}</span>
                   <CookBadge cook={m.cook} />
                 </span>
                 <MealMeta meal={m} last={s.last_eaten[m.id]} />
