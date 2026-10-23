@@ -54,7 +54,7 @@ export function MoreScreen({ query }: { query: URLSearchParams }) {
 
       <section class="card small">
         <h2>Optional features</h2>
-        <p>Claude ideas and video imports: <b>{store.state!.features.ai ? 'on' : 'off'}</b>. Kroger cart: <b>{store.state!.features.kroger ? 'on' : 'off'}</b>.</p>
+        <p>Claude ideas: <b>{store.state!.features.ai ? 'on' : 'off'}</b>. Kroger cart: <b>{store.state!.features.kroger ? 'on' : 'off'}</b>.</p>
         <p class="muted">Setup steps are in the README on GitHub.</p>
       </section>
     </>

@@ -79,6 +79,15 @@ export interface Slot extends SlotConfig {
   sides: SidePick[];
 }
 
+/** A video link saved on the Import screen for Claude to turn into a meal. */
+export interface ImportLink {
+  id: number;
+  url: string;
+  note: string;
+  added_by: string;
+  created_at: string;
+}
+
 export interface HistoryRow {
   id: number;
   date: string;

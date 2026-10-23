@@ -48,7 +48,7 @@ export function IdeasScreen() {
 
       {s.features.ai ? <AiPanel /> : (
         <div class="callout small">
-          <b>Claude ideas and video imports</b> turn on once a Claude API key is added. See More ▸ Setup.
+          <b>Claude ideas</b> turn on once a Claude API key is added (a paid API, a few cents per request). See More ▸ Setup.
         </div>
       )}
 

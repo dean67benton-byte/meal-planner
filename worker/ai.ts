@@ -52,7 +52,7 @@ function toDraft(m: RawMeal, source: string): MealDraft {
   };
 }
 
-async function ask<T extends z.ZodType>(env: Env, schema: T, prompt: Anthropic.MessageParam['content']): Promise<z.infer<T>> {
+async function ask<T extends z.ZodType>(env: Env, schema: T, prompt: string): Promise<z.infer<T>> {
   try {
     const response = await client(env).messages.parse({
       model: 'claude-opus-5-5',
@@ -103,109 +103,4 @@ export async function aiIdeas(
   const prompt = parts.join('\n\n');
   const out = await ask(env, z.object({ meals: z.array(MealSchema) }), prompt);
   return { meals: out.meals.map((m) => toDraft(m, 'ai')) };
-}
-
-type Platform = 'instagram' | 'tiktok' | 'youtube' | 'facebook';
-type VideoInfo = { text: string; image: string };
-
-const PLATFORMS: [RegExp, Platform][] = [
-  [/^https:\/\/(www\.)?instagram\.com\//i, 'instagram'],
-  [/^https:\/\/(www\.|vm\.|m\.)?tiktok\.com\//i, 'tiktok'],
-  [/^https:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i, 'youtube'],
-  [/^https:\/\/(www\.|m\.)?(facebook\.com|fb\.watch)\//i, 'facebook'],
-];
-
-const decode = (s: string) =>
-  s.replace(/&quot;/g, '"').replace(/&#039;|&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
-
-/** Reads a public video page's link-preview tags: caption text and cover image (best effort; sites often block this). */
-async function pageInfo(url: string): Promise<VideoInfo> {
-  try {
-    const res = await fetch(url, {
-      headers: { 'user-agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' },
-      redirect: 'follow',
-    });
-    if (!res.ok) return { text: '', image: '' };
-    const html = (await res.text()).slice(0, 400_000);
-    const metas = [...html.matchAll(/<meta[^>]+(?:property|name)="(og:title|og:description|description|og:image)"[^>]+content="([^"]*)"/gi)];
-    const text = [...new Set(metas.filter((m) => m[1] !== 'og:image').map((m) => decode(m[2])))].join('\n');
-    const image = decode(metas.find((m) => m[1] === 'og:image')?.[2] ?? '');
-    return { text, image };
-  } catch {
-    return { text: '', image: '' };
-  }
-}
-
-/** TikTok and YouTube publish captions and thumbnails through oEmbed, which is more reliable than scraping the page. */
-async function oembed(endpoint: string, url: string): Promise<VideoInfo> {
-  try {
-    const res = await fetch(`${endpoint}?format=json&url=${encodeURIComponent(url)}`);
-    if (!res.ok) return { text: '', image: '' };
-    const o = (await res.json()) as { title?: string; author_name?: string; thumbnail_url?: string };
-    return { text: [o.title, o.author_name && `By ${o.author_name}`].filter(Boolean).join('\n'), image: o.thumbnail_url ?? '' };
-  } catch {
-    return { text: '', image: '' };
-  }
-}
-
-async function videoInfo(url: string, platform: Platform): Promise<VideoInfo> {
-  const sources = [pageInfo(url)];
-  if (platform === 'tiktok') sources.push(oembed('https://www.tiktok.com/oembed', url));
-  if (platform === 'youtube') sources.push(oembed('https://www.youtube.com/oembed', url));
-  const found = await Promise.all(sources);
-  return {
-    text: [...new Set(found.map((f) => f.text).filter(Boolean))].join('\n').slice(0, 6000),
-    image: found.map((f) => f.image).find(Boolean) ?? '',
-  };
-}
-
-type ImageType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-
-/** Downloads the cover image so Claude can see the finished dish. Skipped if it fails or is too big. */
-async function coverImage(src: string): Promise<{ data: string; type: ImageType } | null> {
-  if (!/^https:\/\//i.test(src)) return null;
-  try {
-    const res = await fetch(src);
-    const type = (res.headers.get('content-type') ?? '').split(';')[0].trim() as ImageType;
-    if (!res.ok || !['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(type)) return null;
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length > 3_500_000) return null;
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-    return { data: btoa(bin), type };
-  } catch {
-    return null;
-  }
-}
-
-export async function aiFromReel(env: Env, b: { url?: string; caption?: string }) {
-  const url = (b.url ?? '').trim();
-  const platform = url ? PLATFORMS.find(([re]) => re.test(url))?.[1] : undefined;
-  if (url && !platform) throw new HttpError(400, 'Paste an Instagram, TikTok, YouTube, or Facebook link.');
-  client(env); // fail fast when AI is off, before fetching anything
-  const info = platform ? await videoInfo(url, platform) : { text: '', image: '' };
-  const caption = [b.caption?.slice(0, 6000), info.text].filter(Boolean).join('\n---\n');
-  if (!caption.trim()) {
-    throw new HttpError(
-      422,
-      "Couldn't read that video's caption. Open it, copy the caption (or type what's in the video), and paste it in the box.",
-    );
-  }
-  const cover = await coverImage(info.image);
-  const prompt = `Turn this food video into a recipe we can cook. The text is the video's caption and may be messy, partial, or full of hashtags.${
-    cover ? ' The image is the video\'s cover; use it to tell what the dish is and roughly what goes in it.' : ''
-  }
-If it's too long or pricey, simplify it to fit our rules and say what you changed in "why".
-If the caption has no real recipe, make your best version of the dish it describes.
-
-${caption}`;
-  const out = await ask(
-    env,
-    MealSchema,
-    cover ? [{ type: 'image', source: { type: 'base64', media_type: cover.type, data: cover.data } }, { type: 'text', text: prompt }] : prompt,
-  );
-  const meal = toDraft(out, platform ?? 'instagram');
-  if (url) meal.recipe += `\n\nFrom: ${url}`;
-  return { meal };
 }
