@@ -36,7 +36,7 @@ function client(env: Env) {
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
 }
 
-function toDraft(m: RawMeal, source: string, extraNotes = ''): MealDraft {
+function toDraft(m: RawMeal, source: string): MealDraft {
   return {
     name: m.name,
     category: m.category,
@@ -46,7 +46,7 @@ function toDraft(m: RawMeal, source: string, extraNotes = ''): MealDraft {
     prep_min: m.prep_min,
     cook_min: m.cook_min,
     recipe: m.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'),
-    notes: [m.why, extraNotes].filter(Boolean).join('\n'),
+    notes: m.why,
     source,
     ingredients: m.ingredients.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit })),
   };
@@ -103,45 +103,4 @@ export async function aiIdeas(
   const prompt = parts.join('\n\n');
   const out = await ask(env, z.object({ meals: z.array(MealSchema) }), prompt);
   return { meals: out.meals.map((m) => toDraft(m, 'ai')) };
-}
-
-/** Pulls the caption out of a public reel's link-preview tags (best effort; Instagram often blocks this). */
-async function reelCaption(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      headers: { 'user-agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' },
-      redirect: 'follow',
-    });
-    if (!res.ok) return '';
-    const html = (await res.text()).slice(0, 400_000);
-    const metas = [...html.matchAll(/<meta[^>]+(?:property|name)="(og:title|og:description|description)"[^>]+content="([^"]*)"/gi)];
-    const decode = (s: string) =>
-      s.replace(/&quot;/g, '"').replace(/&#039;|&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
-    return [...new Set(metas.map((m) => decode(m[2])))].join('\n').slice(0, 6000);
-  } catch {
-    return '';
-  }
-}
-
-export async function aiFromReel(env: Env, b: { url?: string; caption?: string }) {
-  const url = (b.url ?? '').trim();
-  if (url && !/^https:\/\/(www\.)?(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com)\//i.test(url)) {
-    throw new HttpError(400, 'Paste an Instagram, TikTok, YouTube, or Facebook link.');
-  }
-  const fetched = url ? await reelCaption(url) : '';
-  const caption = [b.caption?.slice(0, 6000), fetched].filter(Boolean).join('\n---\n');
-  if (!caption.trim()) {
-    throw new HttpError(
-      422,
-      "Couldn't read that reel's caption. Open the reel, copy its caption (or type what's in the video), and paste it in the box.",
-    );
-  }
-  const prompt = `Turn this food video into a recipe we can cook. The text is the video's caption and may be messy, partial, or full of hashtags.
-If it's too long or pricey, simplify it to fit our rules and say what you changed in "why".
-If the caption has no real recipe, make your best version of the dish it describes.
-
-${caption}`;
-  const out = await ask(env, MealSchema, prompt);
-  return { meal: toDraft(out, 'instagram', url ? `From: ${url}` : '') };
 }

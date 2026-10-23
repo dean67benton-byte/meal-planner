@@ -1,5 +1,5 @@
 import type {
-  AppState, KrogerDeal, KrogerPrice, KrogerProduct, KrogerStatus, Meal, MealDraft, PantryItem, Slot, SnackPick,
+  AppState, ImportLink, KrogerDeal, KrogerPrice, KrogerProduct, KrogerStatus, Meal, MealDraft, PantryItem, Slot, SnackPick,
 } from './types';
 
 const KEY = 'household-key';
@@ -65,7 +65,9 @@ export const api = {
   setting: (key: string, value: unknown) => call('PUT', '/settings', { key, value }),
   aiIdeas: (request: string, opts: { useOnHand?: boolean; useDeals?: boolean } = {}) =>
     call<{ meals: MealDraft[] }>('POST', '/ai/ideas', { request, count: 5, ...opts }),
-  aiReel: (url: string, caption: string) => call<{ meal: MealDraft }>('POST', '/ai/reel', { url, caption }),
+  imports: () => call<ImportLink[]>('GET', '/imports'),
+  addImport: (url: string, note: string) => call('POST', '/imports', { url, note, by: getWho() }),
+  deleteImport: (id: number) => call('DELETE', `/imports/${id}`),
   kroger: {
     status: () => call<KrogerStatus>('GET', '/kroger/status'),
     start: () => call<{ url: string }>('POST', '/kroger/start'),

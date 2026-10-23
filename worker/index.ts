@@ -1,6 +1,6 @@
 import type { AppState, Ingredient, Meal, PantryItem, Settings, SidePair, Slot, SnackPick } from '../src/lib/types';
 import { itemKey } from '../src/lib/types';
-import { aiIdeas, aiFromReel } from './ai';
+import { aiIdeas } from './ai';
 import * as kroger from './kroger';
 import { HttpError, json, type Env } from './http';
 
@@ -337,8 +337,23 @@ async function api(req: Request, env: Env, url: URL): Promise<Response> {
     const deals = b.useDeals ? await kroger.deals(env) : [];
     return json(await aiIdeas(env, meals, b, { onHand, deals }));
   }
-  if (path === '/ai/reel' && m === 'POST') {
-    return json(await aiFromReel(env, await body<{ url?: string; caption?: string }>(req)));
+
+  if (path === '/imports' && m === 'GET') {
+    return json((await env.DB.prepare('SELECT * FROM import_queue ORDER BY id').all()).results);
+  }
+  if (path === '/imports' && m === 'POST') {
+    const b = await body<{ url?: string; note?: string; by?: string }>(req);
+    const link = (b.url ?? '').trim();
+    if (!/^https:\/\/\S+$/i.test(link)) throw new HttpError(400, 'Paste a video link that starts with https://');
+    await env.DB.prepare('INSERT INTO import_queue (url, note, added_by) VALUES (?1, ?2, ?3)')
+      .bind(link, (b.note ?? '').trim().slice(0, 1000), b.by ?? '')
+      .run();
+    return json({ ok: true });
+  }
+  match = path.match(/^\/imports\/(\d+)$/);
+  if (match && m === 'DELETE') {
+    await env.DB.prepare('DELETE FROM import_queue WHERE id = ?').bind(Number(match[1])).run();
+    return json({ ok: true });
   }
 
   if (path.startsWith('/kroger/')) return kroger.route(req, env, url, path.slice('/kroger'.length));
