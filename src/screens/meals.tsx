@@ -39,7 +39,10 @@ export function MealsScreen() {
           <h1>Meals</h1>
           <p class="muted">{s.meals.filter((m) => !m.archived).length} in your library</p>
         </div>
-        <a class="btn primary" href="#/meals/new"><Icon name="plus" size={18} /> Add</a>
+        <div class="row gap">
+          <a class="btn" href="#/import"><Icon name="link" size={18} /> Import</a>
+          <a class="btn primary" href="#/meals/new"><Icon name="plus" size={18} /> Add</a>
+        </div>
       </header>
 
       <input class="search" type="search" placeholder="Search meals or ingredients" value={q} onInput={(e) => setQ(e.currentTarget.value)} />

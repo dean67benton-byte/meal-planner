@@ -44,9 +44,11 @@ export function IdeasScreen() {
 
       {s.features.kroger && <SalesPanel />}
 
+      <a class="btn wide import-link" href="#/import"><Icon name="link" size={18} /> Import a recipe from a video</a>
+
       {s.features.ai ? <AiPanel /> : (
         <div class="callout small">
-          <b>Instagram reels and Claude ideas</b> turn on once a Claude API key is added. See More ▸ Setup.
+          <b>Claude ideas and video imports</b> turn on once a Claude API key is added. See More ▸ Setup.
         </div>
       )}
 
@@ -70,7 +72,7 @@ export function IdeasScreen() {
   );
 }
 
-function DraftCard({ draft, why }: { draft: MealDraft; why?: string }) {
+export function DraftCard({ draft, why }: { draft: MealDraft; why?: string }) {
   const store = useStore();
   const [added, setAdded] = useState(false);
   const quickAdd = async () => {
@@ -104,10 +106,7 @@ function DraftCard({ draft, why }: { draft: MealDraft; why?: string }) {
 
 function AiPanel() {
   const store = useStore();
-  const [mode, setMode] = useState<'Ideas from Claude' | 'From a reel'>('Ideas from Claude');
   const [mood, setMood] = useState('');
-  const [url, setUrl] = useState('');
-  const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<MealDraft[]>([]);
   const [useOnHand, setUseOnHand] = useState(false);
@@ -118,13 +117,8 @@ function AiPanel() {
   const run = async () => {
     setBusy(true);
     try {
-      if (mode === 'From a reel') {
-        const r = await api.aiReel(url.trim(), caption.trim());
-        setResults([r.meal]);
-      } else {
-        const r = await api.aiIdeas(mood.trim(), { useOnHand, useDeals });
-        setResults(r.meals);
-      }
+      const r = await api.aiIdeas(mood.trim(), { useOnHand, useDeals });
+      setResults(r.meals);
     } catch (e) {
       store.toast(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
@@ -134,34 +128,18 @@ function AiPanel() {
 
   return (
     <section class="card ai">
-      <Seg label="AI mode" value={mode} options={['Ideas from Claude', 'From a reel'] as const} onChange={(m) => { setMode(m); setResults([]); }} />
-      {mode === 'Ideas from Claude' ? (
-        <>
-          <label class="field">
-            <span>In the mood for anything? (optional)</span>
-            <input value={mood} onInput={(e) => setMood(e.currentTarget.value)} placeholder="e.g. something with ground turkey, no oven" />
-          </label>
-          {onHandCount > 0 && (
-            <label class="toggle"><input type="checkbox" checked={useOnHand} onChange={(e) => setUseOnHand(e.currentTarget.checked)} /> Use what we have at home ({onHandCount} items)</label>
-          )}
-          {s.features.kroger && (
-            <label class="toggle"><input type="checkbox" checked={useDeals} onChange={(e) => setUseDeals(e.currentTarget.checked)} /> Build around this week's Kroger sales</label>
-          )}
-        </>
-      ) : (
-        <>
-          <label class="field">
-            <span>Reel link</span>
-            <input type="url" value={url} onInput={(e) => setUrl(e.currentTarget.value)} placeholder="https://www.instagram.com/reel/…" />
-          </label>
-          <label class="field">
-            <span>Caption (paste it if the link alone doesn't work)</span>
-            <textarea rows={3} value={caption} onInput={(e) => setCaption(e.currentTarget.value)} />
-          </label>
-        </>
+      <label class="field">
+        <span>Ideas from Claude. In the mood for anything? (optional)</span>
+        <input value={mood} onInput={(e) => setMood(e.currentTarget.value)} placeholder="e.g. something with ground turkey, no oven" />
+      </label>
+      {onHandCount > 0 && (
+        <label class="toggle"><input type="checkbox" checked={useOnHand} onChange={(e) => setUseOnHand(e.currentTarget.checked)} /> Use what we have at home ({onHandCount} items)</label>
       )}
-      <button class="btn primary wide" disabled={busy || (mode === 'From a reel' && !url.trim() && !caption.trim())} onClick={run}>
-        {busy ? 'Thinking… (about 20 seconds)' : mode === 'From a reel' ? 'Turn into a recipe' : 'Suggest 5 meals'}
+      {s.features.kroger && (
+        <label class="toggle"><input type="checkbox" checked={useDeals} onChange={(e) => setUseDeals(e.currentTarget.checked)} /> Build around this week's Kroger sales</label>
+      )}
+      <button class="btn primary wide" disabled={busy} onClick={run}>
+        {busy ? 'Thinking… (about 20 seconds)' : 'Suggest 5 meals'}
       </button>
       <p class="small muted">Kept to about 30 minutes, 10 ingredients or fewer, and budget-friendly.</p>
       {results.length > 0 && (

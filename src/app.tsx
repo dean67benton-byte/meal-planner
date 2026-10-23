@@ -11,6 +11,7 @@ import { GroceryScreen } from './screens/grocery';
 import { PantryScreen } from './screens/pantry';
 import { SnacksScreen } from './screens/snacks';
 import { MoreScreen } from './screens/more';
+import { ImportScreen } from './screens/import';
 import { JoinScreen, WhoScreen } from './screens/join';
 
 const TABS = [
@@ -49,10 +50,11 @@ export function App() {
   else if (screen === 'groceries') body = <GroceryScreen />;
   else if (screen === 'pantry') body = <PantryScreen />;
   else if (screen === 'snacks') body = <SnacksScreen />;
+  else if (screen === 'import') body = <ImportScreen query={route.query} />;
   else if (screen === 'more') body = <MoreScreen query={route.query} />;
   else body = <WeekScreen />;
 
-  const active = screen === 'pantry' ? 'groceries' : screen === 'snacks' ? 'week' : screen || 'week';
+  const active = screen === 'pantry' ? 'groceries' : screen === 'import' ? 'meals' : screen === 'snacks' ? 'week' : screen || 'week';
   return (
     <StoreContext.Provider value={store}>
       <main class="screen">{body}</main>
