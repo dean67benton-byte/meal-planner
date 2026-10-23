@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, getKey, getWho, setWho } from '../lib/api';
 import { short, today } from '../lib/dates';
-import { fillWeek } from '../lib/planner';
+import { fillWeek, isOptional } from '../lib/planner';
 import { useStore } from '../lib/store';
 import type { KrogerStatus, Slot, SlotConfig } from '../lib/types';
 import { Icon } from '../icons';
@@ -188,7 +188,7 @@ function SettingsSection() {
       const old = cur.find((x) => x.slot === i);
       return old ? { ...old, ...c } : { ...c, week_of: s.week_of, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [] };
     });
-    const extra = cur.filter((x) => x.slot >= cfg.length);
+    const extra = cur.filter((x) => x.slot >= cfg.length && !isOptional(x));
     await store.run(async () => {
       await api.saveSlots(s.week_of, fillWeek(s, s.week_of, next));
       for (const x of extra) await api.deleteSlot(s.week_of, x.slot);
@@ -209,7 +209,7 @@ function SettingsSection() {
           <div class="row gap" key={i}>
             <input value={x.label} aria-label="Slot name" onInput={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, label: e.currentTarget.value } : y)))} />
             <select value={x.category} aria-label="Category" onChange={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, category: e.currentTarget.value } : y)))}>
-              {s.settings.categories.filter((c) => c !== 'Side').map((c) => <option key={c}>{c}</option>)}
+              {s.settings.categories.filter((c) => c !== 'Side' && !isOptional({ category: c })).map((c) => <option key={c}>{c}</option>)}
             </select>
             <button type="button" class="icon" aria-label="Remove slot" onClick={() => setSlots(slots.filter((_, n) => n !== i))}><Icon name="trash" size={18} /></button>
           </div>

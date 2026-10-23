@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { addDays, short, today } from '../lib/dates';
-import { assignCook, cookSplit, fillWeek, keepLockedSides, reroll, slotWarning, totalMinutes } from '../lib/planner';
+import { OPTIONAL_SLOTS, addOptionalSlot, optionalLabel, assignCook, cookSplit, fillWeek, isNew, isOptional, keepLockedSides, reroll, slotWarning, totalMinutes } from '../lib/planner';
 import { useStore } from '../lib/store';
 import type { Meal, Slot } from '../lib/types';
 import { go } from '../router';
 import { Icon } from '../icons';
-import { CookBadge, Sheet, cookClass } from '../ui';
+import { CookBadge, NewBadge, Sheet, cookClass } from '../ui';
 import { SidesBlock, SnacksSection } from './extras';
 
 export function WeekScreen() {
@@ -17,6 +17,7 @@ export function WeekScreen() {
   const byId = useMemo(() => new Map(s.meals.map((m) => [m.id, m])), [s.meals]);
   const split = cookSplit(s.slots, s.settings.cooks);
   const lockedCount = s.slots.filter((x) => x.locked).length;
+  const missingOptional = OPTIONAL_SLOTS.filter((c) => !s.slots.some((x) => x.category === c));
   const update = (slotNo: number, patch: Partial<Slot>) =>
     store.saveSlots(s.slots.map((x) => (x.slot === slotNo ? { ...x, ...patch } : x)));
 
@@ -59,7 +60,7 @@ export function WeekScreen() {
             <article key={x.slot} class={`slot card ${x.locked ? 'locked' : ''} ${x.eaten_date ? 'eaten' : ''}`}>
               <div class="slot-head">
                 <span class="slot-label">{x.label}</span>
-                {meal && (
+                {meal && !isOptional(x) && (
                   <button class="chip-btn" onClick={() => toggleCook(x)} aria-label={`Cook: ${x.cook ?? 'nobody'}. Tap to switch.`}>
                     <Icon name="chef" size={14} /> <CookBadge cook={x.cook} />
                   </button>
@@ -67,7 +68,7 @@ export function WeekScreen() {
               </div>
               {meal ? (
                 <button class="slot-meal" onClick={() => go(`/meals/${meal.id}`)}>
-                  <span class="meal-name">{meal.name}</span>
+                  <span class="meal-name">{meal.name} {isNew(meal, s) && <NewBadge />}</span>
                   <MealMeta meal={meal} last={s.last_eaten[meal.id]} />
                 </button>
               ) : (
@@ -92,6 +93,9 @@ export function WeekScreen() {
                     <button class="btn" disabled={!s.meals.length} onClick={() => setPicking(x)}><Icon name="search" size={18} /> Pick</button>
                   </>
                 )}
+                {isOptional(x) && !x.eaten_date && (
+                  <button class="btn" onClick={() => store.run(() => api.deleteSlot(s.week_of, x.slot))}><Icon name="x" size={18} /> Remove</button>
+                )}
               </div>
             </article>
           );
@@ -102,6 +106,15 @@ export function WeekScreen() {
         <div class="row gap center">
           <button class="btn" onClick={lockAll}><Icon name="lock" size={18} /> Lock all</button>
           <button class="btn" onClick={refreshAll}><Icon name="reroll" size={18} /> Fresh suggestions</button>
+        </div>
+      )}
+      {missingOptional.length > 0 && (
+        <div class="row gap center">
+          {missingOptional.map((c) => (
+            <button key={c} class="btn" onClick={() => store.saveSlots(addOptionalSlot(s, s.week_of, s.slots, c))}>
+              <Icon name="plus" size={18} /> Add {optionalLabel(c).toLowerCase()}
+            </button>
+          ))}
         </div>
       )}
       <SnacksSection />
@@ -121,7 +134,7 @@ export function WeekScreen() {
             update(picking.slot, {
               meal_id: m.id,
               locked: 1,
-              cook: assignCook(m, working, picking.slot, s.settings.cooks),
+              cook: isOptional(picking) ? null : assignCook(m, working, picking.slot, s.settings.cooks),
               sides: keepLockedSides(picking, m.id),
             });
             setPicking(null);
@@ -141,7 +154,7 @@ export function MealMeta({ meal, last }: { meal: Meal; last?: string }) {
         meal.protein,
         meal.prep_min != null ? `${meal.prep_min} min prep` : mins ? `${mins} min` : '',
         meal.ingredients.length ? `${meal.ingredients.length} ingredients` : '',
-        last ? `last ${short(last)}` : 'never made',
+        last ? `last ${short(last)}` : '',
       ].filter(Boolean).join(' · ')}
     </span>
   );
@@ -161,7 +174,7 @@ function PickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => void;
         {list.map((m) => (
           <li key={m.id}>
             <button class="list-item" disabled={used.has(m.id)} onClick={() => onPick(m)}>
-              <span class="meal-name">{m.name}</span>
+              <span class="meal-name">{m.name} {isNew(m, s) && <NewBadge />}</span>
               <span class="row gap-sm"><CookBadge cook={m.cook} /> <MealMeta meal={m} last={s.last_eaten[m.id]} /></span>
               {used.has(m.id) && <span class="muted small">Already this week</span>}
             </button>
