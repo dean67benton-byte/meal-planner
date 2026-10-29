@@ -4,7 +4,7 @@ import type { Ingredient, MealDraft } from './types';
 
 interface Idea {
   name: string;
-  category?: 'Dinner' | 'Work Lunch' | 'Side';
+  category?: 'Dinner' | 'Side';
   style?: string;
   protein: string;
   prep: number;
@@ -51,16 +51,16 @@ const RAW: Idea[] = [
   { name: 'Cheeseburger Sliders', protein: 'Beef / Deer', prep: 10, cook: 20,
     items: ['1 lb Ground beef', '1 pkg Hawaiian rolls', '6 slice American cheese', '1 each Yellow onion', '2 tbsp Butter', '1 bag Frozen fries'],
     steps: ['Bake fries per bag.', 'Brown beef with diced onion; drain.', 'Split the rolls as one slab, add beef and cheese, then put the tops on.', 'Brush with melted butter; bake at 350°F for 10 minutes.'] },
-  { name: 'Chicken Caesar Wraps', category: 'Work Lunch', protein: 'Chicken', prep: 10, cook: 0,
+  { name: 'Chicken Caesar Wraps', protein: 'Chicken', prep: 10, cook: 0,
     items: ['1 each Rotisserie chicken', '1 bag Caesar salad kit', '1 pkg Flour tortillas'],
     steps: ['Shred the rotisserie chicken.', 'Toss the salad kit with chicken.', 'Roll into tortillas; wrap in foil for the week.'] },
-  { name: 'Turkey & Cheese Pinwheels', category: 'Work Lunch', protein: 'Other', prep: 10, cook: 0,
+  { name: 'Turkey & Cheese Pinwheels', protein: 'Other', prep: 10, cook: 0,
     items: ['1 lb Sliced deli turkey', '1 pkg Flour tortillas', '1 each Cream cheese', '1 bag Spinach', '8 slice Provolone'],
     steps: ['Spread cream cheese on tortillas.', 'Layer turkey, provolone, and spinach.', 'Roll tightly, slice, and pack.'] },
-  { name: 'Burrito Bowl Meal Prep', category: 'Work Lunch', protein: 'Chicken', prep: 10, cook: 20,
+  { name: 'Burrito Bowl Meal Prep', protein: 'Chicken', prep: 10, cook: 20,
     items: ['1.5 lb Chicken thighs', '1 pkg Taco seasoning', '1.5 cup Rice', '1 can Black beans', '1 can Corn', '1 jar Salsa'],
     steps: ['Cook rice.', 'Season and cook chicken; chop.', 'Divide rice, chicken, beans, and corn into containers; salsa on the side.'] },
-  { name: 'Italian Pasta Salad', category: 'Work Lunch', protein: 'Pork', prep: 15, cook: 10,
+  { name: 'Italian Pasta Salad', protein: 'Pork', prep: 15, cook: 10,
     items: ['1 box Rotini', '1 pkg Sliced pepperoni', '1 each Cucumber', '1 pint Cherry tomatoes', '1 bottle Italian dressing', '1 cup Mozzarella pearls'],
     steps: ['Boil pasta; rinse cold.', 'Chop cucumber, halve tomatoes, quarter pepperoni.', 'Toss everything with dressing; keeps 4 days.'] },
   { name: 'Chicken Stir-Fry Noodles', protein: 'Chicken', prep: 10, cook: 15,
@@ -96,7 +96,7 @@ const RAW: Idea[] = [
   { name: 'Veggie Fried Rice', protein: 'Vegetarian', prep: 10, cook: 15,
     items: ['2 cup Rice', '1 bag Frozen peas and carrots', '4 each Eggs', '3 tbsp Soy sauce', '1 bunch Green onions'],
     steps: ['Cook rice ahead (cold rice fries best).', 'Scramble eggs; set aside.', 'Fry veggies and rice, add soy sauce, fold in eggs and onions.'] },
-  { name: 'Greek Chicken Bowls', category: 'Work Lunch', protein: 'Chicken', prep: 15, cook: 20,
+  { name: 'Greek Chicken Bowls', protein: 'Chicken', prep: 15, cook: 20,
     items: ['1.5 lb Chicken thighs', '1 cup Rice', '1 each Cucumber', '1 pint Cherry tomatoes', '1 each Tzatziki', '0.5 cup Feta', '1 bottle Greek dressing'],
     steps: ['Marinate chicken in some dressing; cook 6 minutes per side.', 'Cook rice; chop cucumber and tomatoes.', 'Pack rice, sliced chicken, veggies, and feta; tzatziki on the side.'] },
   { name: 'Smash Burger Tacos', protein: 'Beef / Deer', prep: 5, cook: 15,

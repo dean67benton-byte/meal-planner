@@ -12,7 +12,6 @@ const IngredientSchema = z.object({
 
 const MealSchema = z.object({
   name: z.string(),
-  category: z.enum(['Dinner', 'Work Lunch']),
   protein: z.enum(['Chicken', 'Beef / Deer', 'Pork', 'Seafood', 'Vegetarian', 'Other']),
   servings: z.number().int().nullable(),
   prep_min: z.number().int().nullable(),
@@ -39,7 +38,7 @@ function client(env: Env) {
 function toDraft(m: RawMeal, source: string): MealDraft {
   return {
     name: m.name,
-    category: m.category,
+    category: 'Dinner',
     protein: m.protein,
     cook: 'Either',
     servings: m.servings,

@@ -151,6 +151,8 @@ fieldset.field { display: block; }
 .meal-name { font-size: 1.1rem; font-weight: 700; }
 .meta { font-size: 0.85rem; color: var(--muted); }
 .warn { font-size: 0.85rem; color: var(--warn); margin: 0 0 8px; }
+.price { margin: -4px 0 8px; }
+.dinner-count { align-items: center; margin-bottom: 10px; }
 .slot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .slot-actions .btn { flex: 1 1 auto; }
 

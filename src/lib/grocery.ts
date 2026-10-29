@@ -1,5 +1,6 @@
 // Builds the week's grocery list from locked meals, locked sides, and locked snacks, like the sheet's Grocery List tab.
-import type { AppState, Ingredient, PantryItem } from './types';
+import type { AppState, Ingredient, KrogerPrice, Meal, PantryItem } from './types';
+import { salePrice } from './planner';
 import { itemKey } from './types';
 
 export interface GroceryLine {
@@ -22,6 +23,26 @@ export const PACKAGE_UNITS = new Set(['each', 'can', 'jar', 'pkg', 'bag', 'box',
 /** How many of a product to put in the Kroger cart for a line. */
 export const cartQuantity = (l: GroceryLine) =>
   PACKAGE_UNITS.has(l.unit.toLowerCase()) && l.toBuy ? Math.max(1, Math.ceil(l.toBuy)) : 1;
+
+/** Price per unit for an ingredient: Kroger's sale price for a matched package, then Prices & pantry, then Kroger's regular price. */
+export function unitPrice(item: PantryItem | undefined, unit: string, prices: Record<string, KrogerPrice>) {
+  const kroger = PACKAGE_UNITS.has(unit.toLowerCase()) && item?.store === 'Kroger' && item.kroger_upc ? prices[item.kroger_upc] : undefined;
+  return (kroger && salePrice(item, prices)) ?? item?.price ?? (kroger?.regular || null);
+}
+
+/** Estimated cost of a meal's ingredients. Staples kept on hand don't count; `missing` is ingredients with no price. */
+export function mealCost(meal: Meal, pantry: Map<string, PantryItem>, prices: Record<string, KrogerPrice>) {
+  let cost = 0;
+  let missing = 0;
+  for (const ing of meal.ingredients) {
+    const item = pantry.get(itemKey(ing.name, ing.unit));
+    if (item?.staple && !item.restock) continue;
+    const price = unitPrice(item, ing.unit, prices);
+    if (price == null || ing.qty == null) missing++;
+    else cost += price * ing.qty;
+  }
+  return { cost, missing };
+}
 
 export function buildList(state: AppState) {
   const byId = new Map(state.meals.map((m) => [m.id, m]));

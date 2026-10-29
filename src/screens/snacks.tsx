@@ -6,13 +6,13 @@ import { useStore } from '../lib/store';
 import { itemKey, type PantryItem } from '../lib/types';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
-import { saveSnackItem, useSnackPrices } from './extras';
+import { saveSnackItem, useKrogerPrices } from './extras';
 import { MatchSheet } from './grocery';
 
 export function SnacksScreen() {
   const store = useStore();
   const s = store.state!;
-  const prices = useSnackPrices(s);
+  const prices = useKrogerPrices(s);
   const [editing, setEditing] = useState<PantryItem | 'new' | null>(null);
   const [matching, setMatching] = useState<PantryItem | null>(null);
   const items = snackItems(s.pantry).sort((a, b) => a.name.localeCompare(b.name));
