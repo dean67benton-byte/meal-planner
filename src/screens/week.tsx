@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { addDays, short, today } from '../lib/dates';
-import { OPTIONAL_SLOTS, addOptionalSlot, optionalLabel, assignCook, cookSplit, fillWeek, isNew, isOptional, keepLockedSides, reroll, slotWarning, totalMinutes } from '../lib/planner';
+import { mealCost, money } from '../lib/grocery';
+import {
+  OPTIONAL_SLOTS, addDinner, addOptionalSlot, optionalLabel, assignCook, cookSplit, dinners, fillWeek, isNew, isOptional, keepLockedSides,
+  removableDinner, reroll, slotLabel, slotWarning, totalMinutes,
+} from '../lib/planner';
 import { useStore } from '../lib/store';
-import type { Meal, Slot } from '../lib/types';
+import type { KrogerPrice, Meal, PantryItem, Slot } from '../lib/types';
 import { go } from '../router';
 import { Icon } from '../icons';
 import { CookBadge, NewBadge, Sheet, cookClass } from '../ui';
-import { SidesBlock, SnacksSection } from './extras';
+import { SidesBlock, SnacksSection, useKrogerPrices } from './extras';
 
 export function WeekScreen() {
   const store = useStore();
@@ -15,6 +19,14 @@ export function WeekScreen() {
   const [picking, setPicking] = useState<Slot | null>(null);
   const [eating, setEating] = useState<Slot | null>(null);
   const byId = useMemo(() => new Map(s.meals.map((m) => [m.id, m])), [s.meals]);
+  const pantry = useMemo(() => new Map(s.pantry.map((p) => [p.key, p])), [s.pantry]);
+  const prices = useKrogerPrices(s);
+  const dinnerCount = dinners(s.slots).length;
+  const removeDinner = () => {
+    const x = removableDinner(s.slots);
+    if (!x) return store.toast(dinnerCount > 1 ? 'Unlock a dinner to remove it' : 'A week needs at least one dinner');
+    store.run(() => api.deleteSlot(s.week_of, x.slot), (st) => ({ ...st, slots: st.slots.filter((y) => y.slot !== x.slot) }));
+  };
   const split = cookSplit(s.slots, s.settings.cooks);
   const lockedCount = s.slots.filter((x) => x.locked).length;
   const missingOptional = OPTIONAL_SLOTS.filter((c) => !s.slots.some((x) => x.category === c));
@@ -52,6 +64,15 @@ export function WeekScreen() {
         </div>
       )}
 
+      <div class="row between dinner-count">
+        <span><b>Dinners this week</b></span>
+        <span class="stepper">
+          <button class="icon" aria-label="One fewer dinner" disabled={dinnerCount <= 1} onClick={removeDinner}><Icon name="minus" size={16} /></button>
+          <span>{dinnerCount}</span>
+          <button class="icon" aria-label="One more dinner" onClick={() => store.saveSlots(addDinner(s, s.week_of, s.slots))}><Icon name="plus" size={16} /></button>
+        </span>
+      </div>
+
       <div class="slots">
         {s.slots.map((x) => {
           const meal = x.meal_id ? byId.get(x.meal_id) : undefined;
@@ -59,7 +80,7 @@ export function WeekScreen() {
           return (
             <article key={x.slot} class={`slot card ${x.locked ? 'locked' : ''} ${x.eaten_date ? 'eaten' : ''}`}>
               <div class="slot-head">
-                <span class="slot-label">{x.label}</span>
+                <span class="slot-label">{slotLabel(s.slots, x)}</span>
                 {meal && !isOptional(x) && (
                   <button class="chip-btn" onClick={() => toggleCook(x)} aria-label={`Cook: ${x.cook ?? 'nobody'}. Tap to switch.`}>
                     <Icon name="chef" size={14} /> <CookBadge cook={x.cook} />
@@ -74,8 +95,9 @@ export function WeekScreen() {
               ) : (
                 <p class="slot-meal muted">No meal yet</p>
               )}
+              {meal && !isOptional(x) && <PriceLine meal={meal} slot={x} byId={byId} pantry={pantry} prices={prices} />}
               {warn && <p class="warn">{warn}</p>}
-              {meal && x.category === 'Dinner' && <SidesBlock slot={x} />}
+              {meal && !isOptional(x) && <SidesBlock slot={x} />}
               <div class="slot-actions">
                 {x.locked ? (
                   <>
@@ -160,6 +182,27 @@ export function MealMeta({ meal, last }: { meal: Meal; last?: string }) {
   );
 }
 
+/** Estimated price of a dinner and its sides, from Prices & pantry and today's Kroger prices. */
+function PriceLine({ meal, slot, byId, pantry, prices }: {
+  meal: Meal; slot: Slot; byId: Map<string, Meal>; pantry: Map<string, PantryItem>; prices: Record<string, KrogerPrice>;
+}) {
+  const sides = slot.sides.map((x) => byId.get(x.id)).filter((m): m is Meal => !!m);
+  const parts = [meal, ...sides].map((m) => mealCost(m, pantry, prices));
+  const cost = parts.reduce((sum, p) => sum + p.cost, 0);
+  const missing = parts.reduce((sum, p) => sum + p.missing, 0);
+  if (!meal.ingredients.length) return <p class="price muted small">No ingredients yet, so no price estimate.</p>;
+  return (
+    <p class="price small">
+      {cost > 0 ? <>About <b>{money(cost)}</b>{sides.length ? ' with sides' : ''}</> : <span class="muted">No price estimate yet</span>}
+      {missing > 0 && (
+        <span class="muted">
+          {' · '}{missing} {missing === 1 ? 'ingredient has' : 'ingredients have'} no price (<a href="#/pantry">add prices</a>)
+        </span>
+      )}
+    </p>
+  );
+}
+
 function PickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => void; onPick: (m: Meal) => void }) {
   const s = useStore().state!;
   const [q, setQ] = useState('');
@@ -168,7 +211,7 @@ function PickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => void;
     .filter((m) => !m.archived && m.category === slot.category && m.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <Sheet title={`Pick for ${slot.label}`} onClose={onClose}>
+    <Sheet title={`Pick for ${slotLabel(s.slots, slot)}`} onClose={onClose}>
       <input class="search" type="search" placeholder="Search meals" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
       <ul class="list">
         {list.map((m) => (

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api, getKey, getWho, setWho } from '../lib/api';
 import { short, today } from '../lib/dates';
-import { fillWeek, isOptional } from '../lib/planner';
 import { useStore } from '../lib/store';
-import type { KrogerStatus, Slot, SlotConfig } from '../lib/types';
+import type { KrogerStatus } from '../lib/types';
 import { Icon } from '../icons';
 import { CookBadge, Seg } from '../ui';
 
@@ -165,7 +164,7 @@ function SettingsSection() {
   const store = useStore();
   const s = store.state!;
   const [repeat, setRepeat] = useState(String(s.settings.repeat_days));
-  const [slots, setSlots] = useState<SlotConfig[]>(s.settings.slots);
+  const [dinnerCount, setDinnerCount] = useState(String(s.settings.slots.length || 3));
   const [proteins, setProteins] = useState(s.settings.proteins.join(', '));
   const [stores, setStores] = useState(s.settings.stores.join(', '));
   const list = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
@@ -173,27 +172,12 @@ function SettingsSection() {
   const save = async () => {
     const ok = await store.run(async () => {
       await api.setting('repeat_days', Math.max(0, Number(repeat) || 0));
-      await api.setting('slots', slots.filter((x) => x.label.trim()));
+      const n = Math.min(14, Math.max(1, Math.round(Number(dinnerCount)) || 3));
+      await api.setting('slots', Array.from({ length: n }, (_, i) => ({ label: `Dinner ${i + 1}`, category: 'Dinner' })));
       await api.setting('proteins', list(proteins));
       await api.setting('stores', list(stores));
     });
     if (ok) store.toast('Settings saved');
-  };
-
-  // Make this week's slots match the settings: keep meals in slots that still exist, add new ones with suggestions.
-  const applyToWeek = async () => {
-    const cfg = slots.filter((x) => x.label.trim());
-    const cur = s.slots;
-    const next: Slot[] = cfg.map((c, i) => {
-      const old = cur.find((x) => x.slot === i);
-      return old ? { ...old, ...c } : { ...c, week_of: s.week_of, slot: i, meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [] };
-    });
-    const extra = cur.filter((x) => x.slot >= cfg.length && !isOptional(x));
-    await store.run(async () => {
-      await api.saveSlots(s.week_of, fillWeek(s, s.week_of, next));
-      for (const x of extra) await api.deleteSlot(s.week_of, x.slot);
-    });
-    store.toast('This week updated');
   };
 
   return (
@@ -203,22 +187,11 @@ function SettingsSection() {
         <span>Days before a meal can repeat</span>
         <input inputMode="numeric" value={repeat} onInput={(e) => setRepeat(e.currentTarget.value)} />
       </label>
-      <fieldset class="field">
-        <legend>Meals each week</legend>
-        {slots.map((x, i) => (
-          <div class="row gap" key={i}>
-            <input value={x.label} aria-label="Slot name" onInput={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, label: e.currentTarget.value } : y)))} />
-            <select value={x.category} aria-label="Category" onChange={(e) => setSlots(slots.map((y, n) => (n === i ? { ...y, category: e.currentTarget.value } : y)))}>
-              {s.settings.categories.filter((c) => c !== 'Side' && !isOptional({ category: c })).map((c) => <option key={c}>{c}</option>)}
-            </select>
-            <button type="button" class="icon" aria-label="Remove slot" onClick={() => setSlots(slots.filter((_, n) => n !== i))}><Icon name="trash" size={18} /></button>
-          </div>
-        ))}
-        <button type="button" class="btn" onClick={() => setSlots([...slots, { label: `Dinner ${slots.filter((x) => x.category === 'Dinner').length + 1}`, category: 'Dinner' }])}>
-          <Icon name="plus" size={18} /> Slot
-        </button>
-        <p class="small muted">New weeks use these. <button type="button" class="link" onClick={applyToWeek}>Apply to this week too</button></p>
-      </fieldset>
+      <label class="field">
+        <span>Dinners in a new week</span>
+        <input inputMode="numeric" value={dinnerCount} onInput={(e) => setDinnerCount(e.currentTarget.value)} />
+        <span class="small muted">Change a single week with − and + on the Week tab.</span>
+      </label>
       <label class="field"><span>Proteins (comma separated)</span><input value={proteins} onInput={(e) => setProteins(e.currentTarget.value)} /></label>
       <label class="field"><span>Stores (comma separated)</span><input value={stores} onInput={(e) => setStores(e.currentTarget.value)} /></label>
       <button class="btn primary wide" onClick={save}>Save settings</button>

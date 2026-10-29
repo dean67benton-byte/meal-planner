@@ -5,6 +5,7 @@
 //  4. Prefer a meal whose cook keeps the week split fairly between Dean and Kinley.
 //  5. Never-eaten meals first, then the one eaten longest ago. Ties go to the quicker meal.
 // Rerolling adds the current meal to the slot's "skipped" list and picks again.
+// Every regular slot is a dinner. New weeks get the default count from settings (3); the Week screen adds or removes them.
 // Dessert and Snack slots are optional: a week has none until someone taps "Add dessert" or "Add snack recipe",
 // and they don't count toward the cooking split.
 import type { AppState, KrogerPrice, Meal, PantryItem, Settings, Slot, SnackPick } from './types';
@@ -105,6 +106,29 @@ export function addOptionalSlot(state: PlanData, weekOf: string, slots: Slot[], 
   const p = suggest(state, weekOf, next, slot.slot);
   return next.map((x) => (x.slot === slot.slot ? { ...x, meal_id: p.meal_id } : x));
 }
+
+export const dinners = (slots: Slot[]) => slots.filter((s) => !isOptional(s));
+
+/** "Dinner 1", "Dinner 2", … in week order, so removing one doesn't leave a gap. */
+export const slotLabel = (slots: Slot[], slot: Slot) =>
+  isOptional(slot) ? slot.label : `Dinner ${dinners(slots).findIndex((s) => s.slot === slot.slot) + 1}`;
+
+/** Adds one more dinner to the week with a suggestion in it. */
+export function addDinner(state: PlanData, weekOf: string, slots: Slot[]): Slot[] {
+  const no = Math.max(-1, ...dinners(slots).map((s) => s.slot)) + 1;
+  if (no >= 100) return slots;
+  const slot: Slot = {
+    week_of: weekOf, slot: no, label: `Dinner ${dinners(slots).length + 1}`, category: 'Dinner',
+    meal_id: null, locked: 0, cook: null, skipped: [], eaten_date: null, sides: [],
+  };
+  const next = [...slots, slot].sort((a, b) => a.slot - b.slot);
+  const p = suggest(state, weekOf, next, no);
+  return next.map((x) => (x.slot === no ? { ...x, meal_id: p.meal_id, cook: p.cook } : x));
+}
+
+/** The dinner "−" takes off: the last one that's still just a suggestion. */
+export const removableDinner = (slots: Slot[]) =>
+  dinners(slots).length > 1 ? [...dinners(slots)].reverse().find((s) => !s.locked && !s.eaten_date) ?? null : null;
 
 /** When a dinner's meal changes, sides picked for the old meal go unless they were locked in. */
 export const keepLockedSides = (slot: Slot, mealId: string | null) =>

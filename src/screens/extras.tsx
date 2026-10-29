@@ -117,12 +117,13 @@ function SidePickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => v
   );
 }
 
-// Kroger prices for matched snacks, shared across screens and refreshed when the matched set changes.
+// Today's Kroger prices for matched products (snacks and meal ingredients), shared across screens and
+// refreshed when the matched set changes.
 let priceCache: { key: string; data: Record<string, KrogerPrice> } | null = null;
 
-export function useSnackPrices(s: AppState) {
+export function useKrogerPrices(s: AppState) {
   const upcs = s.features.kroger
-    ? [...new Set(snackItems(s.pantry).filter((p) => p.store === 'Kroger' && p.kroger_upc).map((p) => p.kroger_upc!))].sort()
+    ? [...new Set(s.pantry.filter((p) => p.store === 'Kroger' && p.kroger_upc).map((p) => p.kroger_upc!))].sort().slice(0, 50)
     : [];
   const key = upcs.join(',');
   const [prices, setPrices] = useState<Record<string, KrogerPrice>>(priceCache?.key === key ? priceCache.data : {});
@@ -141,7 +142,7 @@ export function useSnackPrices(s: AppState) {
 export function SnacksSection() {
   const store = useStore();
   const s = store.state!;
-  const prices = useSnackPrices(s);
+  const prices = useKrogerPrices(s);
   const [picking, setPicking] = useState(false);
   const byKey = new Map(s.pantry.map((p) => [p.key, p]));
   const items = snackItems(s.pantry);
