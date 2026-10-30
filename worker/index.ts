@@ -310,11 +310,12 @@ async function api(req: Request, env: Env, url: URL): Promise<Response> {
   }
 
   if (path === '/checks' && m === 'PUT') {
-    const b = await body<{ week_of: string; key: string; bought: boolean }>(req);
+    // bought: 0 not yet, 1 bought, 2 sent to the Kroger cart (true and false still work).
+    const b = await body<{ week_of: string; key: string; bought: boolean | number }>(req);
     await env.DB.prepare(
       'INSERT INTO grocery_checks (week_of, key, bought) VALUES (?1, ?2, ?3) ON CONFLICT(week_of, key) DO UPDATE SET bought = ?3',
     )
-      .bind(b.week_of, b.key, b.bought ? 1 : 0)
+      .bind(b.week_of, b.key, b.bought === 2 ? 2 : b.bought ? 1 : 0)
       .run();
     return json({ ok: true });
   }

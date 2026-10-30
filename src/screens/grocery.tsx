@@ -6,6 +6,7 @@ import { useStore } from '../lib/store';
 import type { KrogerProduct, KrogerStatus } from '../lib/types';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
+import { preloadSuccess, SuccessBurst } from '../success';
 import { useKrogerPrices } from './extras';
 
 export function GroceryScreen() {
@@ -17,24 +18,32 @@ export function GroceryScreen() {
   const [matching, setMatching] = useState<GroceryLine | null>(null);
   const [kroger, setKroger] = useState<KrogerStatus | null>(null);
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
 
   useEffect(() => {
     if (s.features.kroger) api.kroger.status().then(setKroger).catch(() => {});
   }, [s.features.kroger]);
 
-  const bought = (l: GroceryLine) => !!s.checks[l.key];
+  // A check is 1 when the item is bought and 2 when it was sent to the Kroger cart.
+  const bought = (l: GroceryLine) => s.checks[l.key] === 1;
+  const inKroger = (l: GroceryLine) => s.checks[l.key] === 2;
   const toggle = (l: GroceryLine) =>
-    store.run(() => api.check(s.week_of, l.key, !bought(l)), (st) => ({ ...st, checks: { ...st.checks, [l.key]: bought(l) ? 0 : 1 } }));
+    store.run(() => api.check(s.week_of, l.key, bought(l) ? 0 : 1), (st) => ({ ...st, checks: { ...st.checks, [l.key]: bought(l) ? 0 : 1 } }));
 
-  const krogerLines = list.shop.filter((l) => l.store === 'Kroger' && !bought(l));
+  const krogerReady = s.features.kroger && !!kroger?.connected;
+  const krogerLines = list.shop.filter((l) => l.store === 'Kroger' && !bought(l) && !inKroger(l));
   const matched = krogerLines.filter((l) => l.item?.kroger_upc);
+  // Kroger rows are colored by where they stand: blue once sent, green when matched, yellow when they still need a match.
+  const krogerState = (l: GroceryLine) =>
+    !krogerReady || l.store !== 'Kroger' || bought(l) ? null : inKroger(l) ? 'sent' : l.item?.kroger_upc ? 'matched' : 'needs';
   const sendToCart = async () => {
     setSending(true);
+    preloadSuccess().catch(() => {});
     try {
       const r = await api.kroger.cart(matched.map((l) => ({ upc: l.item!.kroger_upc!, quantity: cartQuantity(l) })));
-      await Promise.all(matched.map((l) => api.check(s.week_of, l.key, true)));
+      await Promise.all(matched.map((l) => api.check(s.week_of, l.key, 2)));
       await store.refresh();
-      store.toast(`Added ${r.added} items to your Kroger cart`);
+      setSent(`Added ${r.added} ${r.added === 1 ? 'item' : 'items'} to your Kroger cart`);
     } catch (e) {
       store.toast(e instanceof Error ? e.message : 'Kroger cart failed');
     } finally {
@@ -44,10 +53,11 @@ export function GroceryScreen() {
 
   const toBuy = list.shop.filter((l) => !bought(l));
   const inCart = list.shop.filter(bought);
+  const done = list.shop.filter((l) => bought(l) || inKroger(l)).length;
   const unlockedAll = list.unlocked + list.unlockedExtras;
 
   const row = (l: GroceryLine) => (
-    <li key={l.key} class={bought(l) ? 'bought' : ''}>
+    <li key={l.key} class={`${bought(l) ? 'bought' : ''} ${krogerState(l) ? `k-${krogerState(l)}` : ''}`}>
       <button class="gline tick" role="checkbox" aria-checked={bought(l)} onClick={() => toggle(l)}>
         <span class="check" aria-hidden="true">{bought(l) && <Icon name="check" size={16} />}</span>
         <span class="gtext">
@@ -58,9 +68,10 @@ export function GroceryScreen() {
             {l.cost != null ? ` · ${money(l.cost)}` : ' · no price'}
             {l.store === 'Kroger' && l.item?.kroger_desc ? ` · ${l.item.kroger_desc}` : ''}
           </span>
+          {krogerState(l) && <span class="k-tag">{KROGER_TAGS[krogerState(l)!]}</span>}
         </span>
       </button>
-      {s.features.kroger && l.store === 'Kroger' && kroger?.connected && !bought(l) && (
+      {krogerReady && l.store === 'Kroger' && !bought(l) && !inKroger(l) && (
         <button class="btn tiny" onClick={() => setMatching(l)}>{l.item?.kroger_upc ? 'Change' : 'Match'}</button>
       )}
       <button class="btn tiny" aria-label={`Price and pantry for ${l.name}`} onClick={() => setEditing(l)}>{l.price == null ? '$ ?' : '$'}</button>
@@ -74,7 +85,7 @@ export function GroceryScreen() {
           <h1>Groceries</h1>
           <p class="muted">
             Week of {short(s.week_of)}
-            {list.shop.length > 0 ? ` · ${inCart.length} of ${list.shop.length} in cart` : ''}
+            {list.shop.length > 0 ? ` · ${done} of ${list.shop.length} in cart` : ''}
             {list.total > 0 ? ` · about ${money(list.total)}` : ''}
           </p>
         </div>
@@ -105,8 +116,13 @@ export function GroceryScreen() {
       {s.features.kroger && kroger && !kroger.connected && krogerLines.length > 0 && (
         <p class="small muted">Connect Kroger on the <a href="#/more">More tab</a> to send this list to your cart.</p>
       )}
-      {s.features.kroger && kroger?.connected && krogerLines.length > 0 && matched.length < krogerLines.length && (
-        <p class="small muted">{matched.length} of {krogerLines.length} Kroger items are matched to a product. Tap "Match" on the others.</p>
+      {krogerReady && list.shop.some((l) => l.store === 'Kroger') && (
+        <p class="k-legend small">
+          <span class="k-dot k-matched" /> Matched <span class="k-dot k-needs" /> Needs a match <span class="k-dot k-sent" /> In Kroger cart
+        </p>
+      )}
+      {krogerReady && krogerLines.length > 0 && matched.length < krogerLines.length && (
+        <p class="small muted">{matched.length} of {krogerLines.length} Kroger items are matched to a product. Tap "Match" on the yellow ones.</p>
       )}
 
       {list.stores.map((st) => {
@@ -136,7 +152,7 @@ export function GroceryScreen() {
         </details>
       )}
 
-      {s.features.kroger && kroger?.connected && matched.length > 0 && (
+      {krogerReady && matched.length > 0 && (
         <div class="action-bar">
           <button class="btn primary" disabled={sending} onClick={sendToCart}>
             <Icon name="cart" size={18} /> {sending ? 'Adding…' : `Add ${matched.length} to Kroger cart`}
@@ -157,11 +173,14 @@ export function GroceryScreen() {
         </details>
       )}
 
+      {sent && <SuccessBurst label={sent} onDone={() => setSent(null)} />}
       {editing && <ItemSheet line={editing} onClose={() => setEditing(null)} />}
       {matching && <MatchSheet line={matching} onClose={() => setMatching(null)} />}
     </>
   );
 }
+
+const KROGER_TAGS = { sent: 'In Kroger cart', matched: 'Matched', needs: 'Needs a match' } as const;
 
 export function ItemSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' | 'unit' | 'key' | 'item'>; onClose: () => void }) {
   const store = useStore();

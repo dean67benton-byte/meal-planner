@@ -11,6 +11,7 @@
     "deploy": "wrangler d1 migrations apply meal-planner --remote && wrangler deploy"
   },
   "dependencies": {
+    "lottie-web": "5.13.0",
     "preact": "10.24.3"
   },
   "devDependencies": {
