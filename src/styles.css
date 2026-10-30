@@ -17,6 +17,9 @@
   --kinley-soft: #fce7f3;
   --either: #57534e;
   --either-soft: #e7e5e4;
+  --k-matched: #e6f3e8; --k-matched-line: #7cbf8b; --k-matched-ink: #2f6b3d;
+  --k-needs: #fcf3d4; --k-needs-line: #dfbf55; --k-needs-ink: #77590a;
+  --k-sent: #e3edfa; --k-sent-line: #7aa6dc; --k-sent-ink: #2a5890;
   --radius: 14px;
   --tab-h: 64px;
   color-scheme: light;
@@ -41,6 +44,9 @@
     --kinley-soft: #43182d;
     --either: #d6d3d1;
     --either-soft: #33302d;
+    --k-matched: #16291b; --k-matched-line: #3f7a4c; --k-matched-ink: #a3d9b0;
+    --k-needs: #2d2611; --k-needs-line: #8a7329; --k-needs-ink: #f0d88c;
+    --k-sent: #14233a; --k-sent-line: #3e6596; --k-sent-ink: #aac9f0;
     color-scheme: dark;
   }
 }
@@ -48,6 +54,9 @@
   --bg: #141210; --surface: #1e1b18; --surface-2: #2a2622; --text: #f3eee7; --muted: #a8a097; --line: #36312b;
   --accent: #fb923c; --accent-ink: #1a0d03; --accent-soft: #3b2111; --ok: #4ade80; --ok-soft: #12301d; --warn: #facc15;
   --dean: #93c5fd; --dean-soft: #1e2a44; --kinley: #f9a8d4; --kinley-soft: #43182d; --either: #d6d3d1; --either-soft: #33302d;
+  --k-matched: #16291b; --k-matched-line: #3f7a4c; --k-matched-ink: #a3d9b0;
+  --k-needs: #2d2611; --k-needs-line: #8a7329; --k-needs-ink: #f0d88c;
+  --k-sent: #14233a; --k-sent-line: #3e6596; --k-sent-ink: #aac9f0;
   color-scheme: dark;
 }
 
@@ -203,7 +212,7 @@ fieldset.field { display: block; }
 .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; }
 .totals > div { display: grid; }
 .totals b { font-size: 1.15rem; }
-.glist { list-style: none; padding: 0; margin: 0 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.glist { overflow: hidden; list-style: none; padding: 0; margin: 0 0 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
 .glist li { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--line); min-height: 52px; }
 .glist li:last-child { border-bottom: 0; }
 .gline { flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left; background: none; border: 0; padding: 4px 0; cursor: pointer; overflow-wrap: anywhere; }
@@ -274,3 +283,25 @@ details > summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
 .stepper .icon { width: 34px; height: 34px; }
 .stepper span { min-width: 20px; text-align: center; font-weight: 600; }
 .sale { display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--ok); background: var(--ok-soft); border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+
+/* Kroger checkout: green = matched to a product, yellow = needs a match, blue = sent to the Kroger cart. */
+.glist li.k-matched { background: var(--k-matched); box-shadow: inset 4px 0 0 var(--k-matched-line); }
+.glist li.k-needs { background: var(--k-needs); box-shadow: inset 4px 0 0 var(--k-needs-line); }
+.glist li.k-sent { background: var(--k-sent); box-shadow: inset 4px 0 0 var(--k-sent-line); }
+.k-tag { justify-self: start; font-size: 0.72rem; font-weight: 700; border-radius: 999px; padding: 1px 8px; margin-top: 2px; background: var(--surface); }
+.k-matched .k-tag { color: var(--k-matched-ink); }
+.k-needs .k-tag { color: var(--k-needs-ink); }
+.k-sent .k-tag { color: var(--k-sent-ink); }
+.k-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; color: var(--muted); }
+.k-dot { width: 12px; height: 12px; border-radius: 4px; display: inline-block; vertical-align: -1px; }
+.k-dot.k-matched { background: var(--k-matched); border: 2px solid var(--k-matched-line); }
+.k-dot.k-needs { background: var(--k-needs); border: 2px solid var(--k-needs-line); margin-left: 6px; }
+.k-dot.k-sent { background: var(--k-sent); border: 2px solid var(--k-sent-line); margin-left: 6px; }
+
+/* Success animation after sending to Kroger */
+.success-burst { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgb(0 0 0 / 0.35); animation: fade-in 0.15s ease-out; }
+.success-card { background: var(--surface); border-radius: 20px; padding: 16px 24px 20px; width: min(300px, calc(100% - 48px)); text-align: center; box-shadow: 0 8px 32px rgb(0 0 0 / 0.2); }
+.success-anim { width: 160px; height: 160px; margin: 0 auto; display: grid; place-items: center; color: var(--ok); }
+.success-card p { margin: 4px 0 0; font-weight: 600; }
+@keyframes fade-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .success-burst { animation: none; } }

@@ -61,7 +61,8 @@ export const api = {
     call('POST', `/weeks/${week}/slots/${slot}/eaten`, { date, by: getWho() }),
   addHistory: (date: string, meal_id: string) => call('POST', '/history', { date, meal_id, by: getWho() }),
   deleteHistory: (id: number) => call('DELETE', `/history/${id}`),
-  check: (week_of: string, key: string, bought: boolean) => call('PUT', '/checks', { week_of, key, bought }),
+  /** bought: 0 not yet, 1 bought, 2 sent to the Kroger cart. */
+  check: (week_of: string, key: string, bought: 0 | 1 | 2) => call('PUT', '/checks', { week_of, key, bought }),
   setting: (key: string, value: unknown) => call('PUT', '/settings', { key, value }),
   aiIdeas: (request: string, opts: { useOnHand?: boolean; useDeals?: boolean } = {}) =>
     call<{ meals: MealDraft[] }>('POST', '/ai/ideas', { request, count: 5, ...opts }),
