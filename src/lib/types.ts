@@ -156,7 +156,8 @@ export interface KrogerProduct {
   description: string;
   brand: string;
   size: string;
-  price: number | null;
+  price: number | null; // today's price: the sale price when on sale
+  regular: number | null;
   image: string | null;
 }
 

@@ -46,11 +46,7 @@ export function IdeasScreen() {
 
       <a class="btn wide import-link" href="#/import"><Icon name="link" size={18} /> Import a recipe from a video</a>
 
-      {s.features.ai ? <AiPanel /> : (
-        <div class="callout small">
-          <b>Claude ideas</b> turn on once a Claude API key is added (a paid API, a few cents per request). See More ▸ Setup.
-        </div>
-      )}
+      {s.features.ai && <AiPanel />}
 
       <h2>Starter ideas</h2>
       <div class="filters">

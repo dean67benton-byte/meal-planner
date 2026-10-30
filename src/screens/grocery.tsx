@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'preact/hooks';
 import { api } from '../lib/api';
 import { short } from '../lib/dates';
-import { buildList, cartQuantity, fmtQty, money, PACKAGE_UNITS, type GroceryLine } from '../lib/grocery';
+import { AISLES, aisleFor, buildList, cartQuantity, fmtQty, krogerUnitPrice, money, type GroceryLine } from '../lib/grocery';
 import { useStore } from '../lib/store';
 import type { KrogerProduct, KrogerStatus } from '../lib/types';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
+import { useKrogerPrices } from './extras';
 
 export function GroceryScreen() {
   const store = useStore();
   const s = store.state!;
-  const list = buildList(s);
+  const prices = useKrogerPrices(s);
+  const list = buildList(s, prices);
   const [editing, setEditing] = useState<GroceryLine | null>(null);
   const [matching, setMatching] = useState<GroceryLine | null>(null);
   const [kroger, setKroger] = useState<KrogerStatus | null>(null);
@@ -40,82 +42,107 @@ export function GroceryScreen() {
     }
   };
 
+  const toBuy = list.shop.filter((l) => !bought(l));
+  const inCart = list.shop.filter(bought);
+  const unlockedAll = list.unlocked + list.unlockedExtras;
+
+  const row = (l: GroceryLine) => (
+    <li key={l.key} class={bought(l) ? 'bought' : ''}>
+      <button class="gline tick" role="checkbox" aria-checked={bought(l)} onClick={() => toggle(l)}>
+        <span class="check" aria-hidden="true">{bought(l) && <Icon name="check" size={16} />}</span>
+        <span class="gtext">
+          <span><b>{l.name}</b> <span class="qty">{l.toBuy == null ? '' : `${fmtQty(l.toBuy)} ${l.unit}`}</span></span>
+          <span class="small muted">
+            {l.usedIn.join(', ')}
+            {l.onHand > 0 && ` · have ${fmtQty(l.onHand)}`}
+            {l.cost != null ? ` · ${money(l.cost)}` : ' · no price'}
+            {l.store === 'Kroger' && l.item?.kroger_desc ? ` · ${l.item.kroger_desc}` : ''}
+          </span>
+        </span>
+      </button>
+      {s.features.kroger && l.store === 'Kroger' && kroger?.connected && !bought(l) && (
+        <button class="btn tiny" onClick={() => setMatching(l)}>{l.item?.kroger_upc ? 'Change' : 'Match'}</button>
+      )}
+      <button class="btn tiny" aria-label={`Price and pantry for ${l.name}`} onClick={() => setEditing(l)}>{l.price == null ? '$ ?' : '$'}</button>
+    </li>
+  );
+
   return (
     <>
       <header class="top">
         <div class="top-title">
           <h1>Groceries</h1>
-          <p class="muted">Week of {short(s.week_of)} · {list.lockedCount} locked meals{list.snackCount ? ` · ${list.snackCount} snacks` : ''}</p>
+          <p class="muted">
+            Week of {short(s.week_of)}
+            {list.shop.length > 0 ? ` · ${inCart.length} of ${list.shop.length} in cart` : ''}
+            {list.total > 0 ? ` · about ${money(list.total)}` : ''}
+          </p>
         </div>
-        <a class="btn" href="#/pantry">Prices & pantry</a>
+        <a class="btn" href="#/pantry">Prices</a>
       </header>
 
-      {list.unlocked > 0 && (
-        <div class="callout small">
-          {list.unlocked} {list.unlocked === 1 ? "meal isn't" : "meals aren't"} locked in yet, so {list.unlocked === 1 ? "it's" : "they're"} not on this list. <a href="#/week">Lock them on the Week tab.</a>
-        </div>
-      )}
-      {list.unlockedExtras > 0 && (
-        <div class="callout small">
-          {list.unlockedExtras} {list.unlockedExtras === 1 ? "side or snack isn't" : "sides and snacks aren't"} locked in yet. <a href="#/week">Lock them on the Week tab.</a>
-        </div>
+      {unlockedAll > 0 && (
+        <p class="callout small">
+          {list.unlocked > 0 && `${list.unlocked} ${list.unlocked === 1 ? 'meal' : 'meals'}`}
+          {list.unlocked > 0 && list.unlockedExtras > 0 && ' and '}
+          {list.unlockedExtras > 0 && `${list.unlockedExtras} ${list.unlockedExtras === 1 ? 'side or snack' : 'sides and snacks'}`}
+          {unlockedAll === 1 ? " isn't" : " aren't"} locked in yet, so {unlockedAll === 1 ? "it's" : "they're"} not on this list. <a href="#/week">Lock them on the Week tab.</a>
+        </p>
       )}
       {!list.lockedCount && !list.snackCount && <div class="empty">Lock in meals on the Week tab and their ingredients add up here.</div>}
 
-      {list.shop.length > 0 && (
+      {list.shop.length > 0 && list.stores.length > 1 && list.total > 0 && (
         <div class="totals card">
-          <div><span class="muted small">Estimated</span><b>{money(list.total)}</b></div>
           {list.stores.map((st) => (
             <div key={st}><span class="muted small">{st}</span><b>{money(list.shop.filter((l) => l.store === st).reduce((a, l) => a + (l.cost ?? 0), 0))}</b></div>
           ))}
-          {list.missingPrices > 0 && <p class="small muted full">{list.missingPrices} items have no price yet, so the total is low. Tap an item to add one.</p>}
         </div>
       )}
-
-      {s.features.kroger && kroger && krogerLines.length > 0 && (
-        <div class="card kroger">
-          {!kroger.connected ? (
-            <p class="small">Connect Kroger on the <a href="#/more">More tab</a> to send this list to your cart.</p>
-          ) : (
-            <>
-              <p class="small">
-                {matched.length} of {krogerLines.length} Kroger items are matched to a product.
-                {matched.length < krogerLines.length && ' Tap "Match" on the others.'}
-              </p>
-              <button class="btn primary wide" disabled={!matched.length || sending} onClick={sendToCart}>
-                <Icon name="cart" size={18} /> {sending ? 'Adding…' : `Add ${matched.length} to Kroger cart`}
-              </button>
-            </>
-          )}
-        </div>
+      {list.missingPrices > 0 && (
+        <p class="small muted">{list.missingPrices} {list.missingPrices === 1 ? 'item has' : 'items have'} no price yet{list.total > 0 ? ', so the total is low' : ''}. Tap <b>$ ?</b> to add one{s.features.kroger ? ' or find it on Kroger' : ''}.</p>
       )}
 
-      {list.stores.map((st) => (
-        <section key={st}>
-          <h2>{st}</h2>
-          <ul class="glist">
-            {list.shop.filter((l) => l.store === st).map((l) => (
-              <li key={l.key} class={bought(l) ? 'bought' : ''}>
-                <button class="check" role="checkbox" aria-checked={bought(l)} aria-label={`Bought ${l.name}`} onClick={() => toggle(l)}>
-                  {bought(l) && <Icon name="check" size={16} />}
-                </button>
-                <button class="gline" onClick={() => setEditing(l)}>
-                  <span><b>{l.name}</b> <span class="qty">{l.toBuy == null ? '' : `${fmtQty(l.toBuy)} ${l.unit}`}</span></span>
-                  <span class="small muted">
-                    {l.usedIn.join(', ')}
-                    {l.onHand > 0 && ` · have ${fmtQty(l.onHand)}`}
-                    {l.cost != null ? ` · ${money(l.cost)}` : ' · no price'}
-                    {l.store === 'Kroger' && l.item?.kroger_desc ? ` · ${l.item.kroger_desc}` : ''}
-                  </span>
-                </button>
-                {s.features.kroger && l.store === 'Kroger' && kroger?.connected && (
-                  <button class="btn tiny" onClick={() => setMatching(l)}>{l.item?.kroger_upc ? 'Change' : 'Match'}</button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      {s.features.kroger && kroger && !kroger.connected && krogerLines.length > 0 && (
+        <p class="small muted">Connect Kroger on the <a href="#/more">More tab</a> to send this list to your cart.</p>
+      )}
+      {s.features.kroger && kroger?.connected && krogerLines.length > 0 && matched.length < krogerLines.length && (
+        <p class="small muted">{matched.length} of {krogerLines.length} Kroger items are matched to a product. Tap "Match" on the others.</p>
+      )}
+
+      {list.stores.map((st) => {
+        const lines = toBuy.filter((l) => l.store === st);
+        if (!lines.length) return null;
+        return (
+          <section key={st}>
+            <h2>{st}</h2>
+            {AISLES.map((aisle) => {
+              const here = lines.filter((l) => aisleFor(l.name, l.unit) === aisle);
+              return here.length ? (
+                <div key={aisle}>
+                  <h3 class="aisle">{aisle}</h3>
+                  <ul class="glist">{here.map(row)}</ul>
+                </div>
+              ) : null;
+            })}
+          </section>
+        );
+      })}
+      {list.shop.length > 0 && !toBuy.length && <div class="empty">Everything's in the cart.</div>}
+
+      {inCart.length > 0 && (
+        <details class="in-cart">
+          <summary>In cart ({inCart.length})</summary>
+          <ul class="glist">{inCart.map(row)}</ul>
+        </details>
+      )}
+
+      {s.features.kroger && kroger?.connected && matched.length > 0 && (
+        <div class="action-bar">
+          <button class="btn primary" disabled={sending} onClick={sendToCart}>
+            <Icon name="cart" size={18} /> {sending ? 'Adding…' : `Add ${matched.length} to Kroger cart`}
+          </button>
+        </div>
+      )}
 
       {list.covered.length > 0 && (
         <details>
@@ -145,6 +172,8 @@ export function ItemSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' | 
   const [storeName, setStore] = useState(it?.store ?? 'Kroger');
   const [staple, setStaple] = useState(!!it?.staple);
   const [restock, setRestock] = useState(!!it?.restock);
+  const [matching, setMatching] = useState(false);
+  if (matching) return <MatchSheet line={line} onClose={onClose} />;
   const save = async () => {
     onClose();
     await store.run(() =>
@@ -174,6 +203,12 @@ export function ItemSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' | 
       <label class="toggle"><input type="checkbox" checked={staple} onChange={(e) => setStaple(e.currentTarget.checked)} /> Pantry staple (salt, spices, oil…), usually left off the list</label>
       {staple && <label class="toggle"><input type="checkbox" checked={restock} onChange={(e) => setRestock(e.currentTarget.checked)} /> Running low: put it on the list</label>}
       <button class="btn primary wide" onClick={save}>Save</button>
+      {s.features.kroger && (
+        <button class="btn wide" onClick={() => setMatching(true)}>
+          <Icon name="search" size={18} /> {it?.kroger_upc ? 'Change Kroger product' : 'Find it on Kroger'}
+        </button>
+      )}
+      {it?.kroger_desc && <p class="small muted">Kroger: {it.kroger_desc}</p>}
     </Sheet>
   );
 }
@@ -196,9 +231,11 @@ export function MatchSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' |
   useEffect(() => {
     search();
   }, []);
+  // Picking a product sets the ingredient's price from Kroger's regular price, converted to the recipe's unit.
   const pick = async (p: KrogerProduct) => {
     onClose();
-    await store.run(() =>
+    const price = krogerUnitPrice(p.regular ?? p.price, p.size, line.unit);
+    const ok = await store.run(() =>
       api.savePantry({
         ...(line.item ?? {}),
         key: line.key,
@@ -207,17 +244,22 @@ export function MatchSheet({ line, onClose }: { line: Pick<GroceryLine, 'name' |
         store: 'Kroger',
         kroger_upc: p.upc,
         kroger_desc: [p.brand, p.description, p.size].filter(Boolean).join(' ').slice(0, 120),
-        price: line.item?.price ?? (PACKAGE_UNITS.has(line.unit.toLowerCase()) ? p.price : null),
+        price: price ?? line.item?.price ?? null,
       }),
     );
+    if (ok) {
+      store.toast(price != null
+        ? `Price set to ${money(price)} per ${line.unit}`
+        : `Matched. Kroger sells it by ${p.size || 'the package'}, so set the price per ${line.unit} yourself.`);
+    }
   };
   return (
-    <Sheet title={`Kroger product for ${line.name}`} onClose={onClose}>
-      <form class="row gap" onSubmit={(e) => { e.preventDefault(); search(); }}>
+    <Sheet title={`Kroger product for ${line.name}`} onClose={onClose} tall>
+      <form class="row gap search-row" onSubmit={(e) => { e.preventDefault(); search(); }}>
         <input class="search" type="search" value={term} onInput={(e) => setTerm(e.currentTarget.value)} />
         <button class="btn" disabled={busy}>Search</button>
       </form>
-      <p class="small muted">The app remembers your pick for next time.</p>
+      <p class="small muted">The app remembers your pick and uses its Kroger price from now on.</p>
       {busy && <p class="muted">Searching…</p>}
       <ul class="list">
         {results?.map((p) => (

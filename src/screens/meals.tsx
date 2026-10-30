@@ -15,6 +15,8 @@ export function MealsScreen() {
   const [cook, setCook] = useState('Anyone');
   const [sort, setSort] = useState<Sort>('A–Z');
   const [showArchived, setShowArchived] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const active = [cat !== 'All' && cat, cook !== 'Anyone' && cook, sort !== 'A–Z' && sort].filter(Boolean) as string[];
 
   let list = s.meals.filter(
     (m) =>
@@ -45,12 +47,18 @@ export function MealsScreen() {
         </div>
       </header>
 
-      <input class="search" type="search" placeholder="Search meals or ingredients" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
-      <div class="filters">
+      <div class="row gap search-bar">
+        <input class="search" type="search" placeholder="Search meals or ingredients" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+        <button class={`btn ${active.length ? 'primary' : ''}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)}>
+          Filter{active.length ? ` (${active.length})` : ''}
+        </button>
+      </div>
+      {active.length > 0 && !filtersOpen && <p class="small muted filter-note">{active.join(' · ')}</p>}
+      {filtersOpen && <div class="filters">
         <Seg label="Category" value={cat} options={['All', ...s.settings.categories]} onChange={setCat} />
         <Seg label="Who can cook" value={cook} options={['Anyone', ...s.settings.cooks]} onChange={setCook} />
         <Seg label="Sort" value={sort} options={['A–Z', 'Quickest', 'Longest ago'] as const} onChange={setSort} />
-      </div>
+      </div>}
 
       <ul class="list cards">
         {list.map((m) => {
@@ -63,11 +71,11 @@ export function MealsScreen() {
                   <CookBadge cook={m.cook} />
                 </span>
                 <MealMeta meal={m} last={s.last_eaten[m.id]} />
-                <span class="small muted">
-                  {m.category}
-                  {wait ? ` · ready ${short(wait)}` : ''}
-                  {!m.ingredients.length ? ' · ⚠ no ingredients yet' : ''}
-                </span>
+                {(cat === 'All' || wait || !m.ingredients.length) && (
+                  <span class="small muted">
+                    {[cat === 'All' ? m.category : '', wait ? `ready ${short(wait)}` : '', !m.ingredients.length ? '⚠ no ingredients yet' : ''].filter(Boolean).join(' · ')}
+                  </span>
+                )}
               </a>
             </li>
           );
