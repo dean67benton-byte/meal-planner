@@ -93,8 +93,8 @@ function SidePickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => v
     .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (kept.get(b.id) ?? 0) - (kept.get(a.id) ?? 0) || a.name.localeCompare(b.name));
   return (
-    <Sheet title={`Side for ${meal?.name ?? slot.label}`} onClose={onClose}>
-      <input class="search" type="search" placeholder="Search sides" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+    <Sheet title={`Side for ${meal?.name ?? slot.label}`} onClose={onClose} tall>
+      <div class="search-row"><input class="search" type="search" placeholder="Search sides" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
       <ul class="list">
         {list.map((m) => (
           <li key={m.id}>
@@ -245,8 +245,8 @@ function SnackPickSheet({ prices, onClose, onPick }: { prices: Record<string, Kr
     if (key) onPick(key);
   };
   return (
-    <Sheet title="Pick a snack" onClose={onClose}>
-      <input class="search" type="search" placeholder="Search or type a new snack" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+    <Sheet title="Pick a snack" onClose={onClose} tall>
+      <div class="search-row"><input class="search" type="search" placeholder="Search or type a new snack" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
       <ul class="list">
         {list.map((p) => (
           <li key={p.key}>

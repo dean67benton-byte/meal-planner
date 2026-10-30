@@ -8,7 +8,6 @@ import {
 } from '../lib/planner';
 import { useStore } from '../lib/store';
 import type { KrogerPrice, Meal, PantryItem, Slot } from '../lib/types';
-import { go } from '../router';
 import { Icon } from '../icons';
 import { CookBadge, NewBadge, Sheet, cookClass } from '../ui';
 import { SidesBlock, SnacksSection, useKrogerPrices } from './extras';
@@ -18,6 +17,7 @@ export function WeekScreen() {
   const s = store.state!;
   const [picking, setPicking] = useState<Slot | null>(null);
   const [eating, setEating] = useState<Slot | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
   const byId = useMemo(() => new Map(s.meals.map((m) => [m.id, m])), [s.meals]);
   const pantry = useMemo(() => new Map(s.pantry.map((p) => [p.key, p])), [s.pantry]);
   const prices = useKrogerPrices(s);
@@ -29,6 +29,13 @@ export function WeekScreen() {
   };
   const split = cookSplit(s.slots, s.settings.cooks);
   const lockedCount = s.slots.filter((x) => x.locked).length;
+  const unlockedCount = s.slots.filter((x) => !x.locked && x.meal_id).length;
+  // Each dinner's estimated price with its sides, and the week's total.
+  const costs = new Map(
+    s.slots.filter((x) => x.meal_id && byId.has(x.meal_id) && !isOptional(x)).map((x) => [x.slot, dinnerCost(byId.get(x.meal_id!)!, x, byId, pantry, prices)]),
+  );
+  const weekCost = [...costs.values()].reduce((sum, c) => sum + c.cost, 0);
+  const missingPrices = [...costs.values()].reduce((sum, c) => sum + c.missing, 0);
   const missingOptional = OPTIONAL_SLOTS.filter((c) => !s.slots.some((x) => x.category === c));
   const update = (slotNo: number, patch: Partial<Slot>) =>
     store.saveSlots(s.slots.map((x) => (x.slot === slotNo ? { ...x, ...patch } : x)));
@@ -47,12 +54,18 @@ export function WeekScreen() {
         <div class="top-title">
           <h1>Week of {short(s.week_of)}</h1>
           <p class="muted">
-            {lockedCount}/{s.slots.length} locked in
+            {lockedCount} of {s.slots.length} locked{weekCost > 0 && <> · about <b>{money(weekCost)}</b></>}
             {s.settings.cooks.map((c) => <span key={c}> · <span class={cookClass(c)}>{c} {split[c] ?? 0}</span></span>)}
           </p>
         </div>
         <button class="icon" aria-label="Next week" onClick={() => store.setWeek(addDays(store.week, 7))}><Icon name="chevR" /></button>
       </header>
+
+      {missingPrices > 0 && (
+        <p class="small muted price-note">
+          {missingPrices} {missingPrices === 1 ? 'ingredient has' : 'ingredients have'} no price yet, so totals run low. <a href="#/pantry">Add prices</a>
+        </p>
+      )}
 
       {!s.meals.length && (
         <div class="callout">
@@ -64,8 +77,83 @@ export function WeekScreen() {
         </div>
       )}
 
+      <div class="slots">
+        {s.slots.map((x) => {
+          const meal = x.meal_id ? byId.get(x.meal_id) : undefined;
+          const warn = slotWarning(s, s.week_of, s.slots, x);
+          const isOpen = open === x.slot || !meal;
+          const cost = meal && !isOptional(x) ? costs.get(x.slot) : undefined;
+          const sideNames = x.sides.map((y) => byId.get(y.id)?.name).filter(Boolean);
+          return (
+            <article key={x.slot} class={`slot card ${x.locked ? 'locked' : ''} ${x.eaten_date ? 'eaten' : ''}`}>
+              <div class="slot-row">
+                <button class="slot-sum" aria-expanded={isOpen} disabled={!meal} onClick={() => setOpen(isOpen ? null : x.slot)}>
+                  <span class="slot-label">{slotLabel(s.slots, x)}</span>
+                  <span class="meal-name">{meal ? meal.name : 'No meal yet'} {meal && isNew(meal, s) && <NewBadge />}</span>
+                  {meal && (
+                    <span class="meta">
+                      {[
+                        !isOptional(x) ? x.cook ?? 'Either' : '',
+                        cost && cost.cost > 0 ? `${cost.missing ? 'at least ' : 'about '}${money(cost.cost)}` : '',
+                        meal.prep_min != null ? `${meal.prep_min} min prep` : '',
+                        sideNames.length ? `+ ${sideNames.join(', ')}` : '',
+                        x.eaten_date ? `eaten ${short(x.eaten_date)}` : '',
+                      ].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
+                </button>
+                {meal && !x.locked && (
+                  <button class="icon" aria-label={`Reroll ${meal.name}`} onClick={() => store.saveSlots(reroll(s, s.week_of, s.slots, x.slot))}><Icon name="reroll" /></button>
+                )}
+                {meal && !x.eaten_date && (
+                  <button
+                    class={`lock-btn ${x.locked ? 'on' : ''}`}
+                    aria-label={x.locked ? `Unlock ${meal.name}` : `Lock in ${meal.name}`}
+                    aria-pressed={!!x.locked}
+                    onClick={() => update(x.slot, { locked: x.locked ? 0 : 1 })}
+                  >
+                    <Icon name="lock" size={18} />{!x.locked && <span>Lock</span>}
+                  </button>
+                )}
+                {x.eaten_date && <span class="icon done-mark" aria-label="Eaten"><Icon name="check" /></span>}
+              </div>
+              {isOpen && (
+                <div class="slot-more">
+                  {meal && (
+                    <div class="row between">
+                      <a class="small" href={`#/meals/${meal.id}`}>Open recipe →</a>
+                      {!isOptional(x) && (
+                        <button class="chip-btn" onClick={() => toggleCook(x)} aria-label={`Cook: ${x.cook ?? 'nobody'}. Tap to switch.`}>
+                          <Icon name="chef" size={14} /> <CookBadge cook={x.cook} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {meal && <MealMeta meal={meal} last={s.last_eaten[meal.id]} />}
+                  {cost && meal && <PriceLine meal={meal} cost={cost} hasSides={x.sides.length > 0} />}
+                  {warn && <p class="warn">{warn}</p>}
+                  {meal && !isOptional(x) && <SidesBlock slot={x} />}
+                  <div class="slot-actions">
+                    {x.locked ? (
+                      <button class={`btn ${x.eaten_date ? 'done' : 'primary'}`} onClick={() => (x.eaten_date ? store.run(() => api.eaten(s.week_of, x.slot, null)) : setEating(x))}>
+                        <Icon name="check" size={18} /> {x.eaten_date ? `Eaten ${short(x.eaten_date)}` : 'Mark eaten'}
+                      </button>
+                    ) : (
+                      <button class="btn" disabled={!s.meals.length} onClick={() => setPicking(x)}><Icon name="search" size={18} /> Pick a meal</button>
+                    )}
+                    {isOptional(x) && !x.eaten_date && (
+                      <button class="btn" onClick={() => store.run(() => api.deleteSlot(s.week_of, x.slot))}><Icon name="x" size={18} /> Remove</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+
       <div class="row between dinner-count">
-        <span><b>Dinners this week</b></span>
+        <span>Dinners this week</span>
         <span class="stepper">
           <button class="icon" aria-label="One fewer dinner" disabled={dinnerCount <= 1} onClick={removeDinner}><Icon name="minus" size={16} /></button>
           <span>{dinnerCount}</span>
@@ -73,78 +161,31 @@ export function WeekScreen() {
         </span>
       </div>
 
-      <div class="slots">
-        {s.slots.map((x) => {
-          const meal = x.meal_id ? byId.get(x.meal_id) : undefined;
-          const warn = slotWarning(s, s.week_of, s.slots, x);
-          return (
-            <article key={x.slot} class={`slot card ${x.locked ? 'locked' : ''} ${x.eaten_date ? 'eaten' : ''}`}>
-              <div class="slot-head">
-                <span class="slot-label">{slotLabel(s.slots, x)}</span>
-                {meal && !isOptional(x) && (
-                  <button class="chip-btn" onClick={() => toggleCook(x)} aria-label={`Cook: ${x.cook ?? 'nobody'}. Tap to switch.`}>
-                    <Icon name="chef" size={14} /> <CookBadge cook={x.cook} />
-                  </button>
-                )}
-              </div>
-              {meal ? (
-                <button class="slot-meal" onClick={() => go(`/meals/${meal.id}`)}>
-                  <span class="meal-name">{meal.name} {isNew(meal, s) && <NewBadge />}</span>
-                  <MealMeta meal={meal} last={s.last_eaten[meal.id]} />
-                </button>
-              ) : (
-                <p class="slot-meal muted">No meal yet</p>
-              )}
-              {meal && !isOptional(x) && <PriceLine meal={meal} slot={x} byId={byId} pantry={pantry} prices={prices} />}
-              {warn && <p class="warn">{warn}</p>}
-              {meal && !isOptional(x) && <SidesBlock slot={x} />}
-              <div class="slot-actions">
-                {x.locked ? (
-                  <>
-                    <button class={`btn ${x.eaten_date ? 'done' : 'primary'}`} onClick={() => (x.eaten_date ? store.run(() => api.eaten(s.week_of, x.slot, null)) : setEating(x))}>
-                      <Icon name="check" size={18} /> {x.eaten_date ? `Eaten ${short(x.eaten_date)}` : 'Mark eaten'}
-                    </button>
-                    {!x.eaten_date && (
-                      <button class="btn" onClick={() => update(x.slot, { locked: 0 })}><Icon name="unlock" size={18} /> Unlock</button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <button class="btn primary" disabled={!meal} onClick={() => update(x.slot, { locked: 1 })}><Icon name="lock" size={18} /> Lock in</button>
-                    <button class="btn" disabled={!s.meals.length} onClick={() => store.saveSlots(reroll(s, s.week_of, s.slots, x.slot))}><Icon name="reroll" size={18} /> Reroll</button>
-                    <button class="btn" disabled={!s.meals.length} onClick={() => setPicking(x)}><Icon name="search" size={18} /> Pick</button>
-                  </>
-                )}
-                {isOptional(x) && !x.eaten_date && (
-                  <button class="btn" onClick={() => store.run(() => api.deleteSlot(s.week_of, x.slot))}><Icon name="x" size={18} /> Remove</button>
-                )}
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <details class="extras card" open={s.snacks.length > 0}>
+        <summary>Extras <span class="muted small">dessert, snack recipe, snacks</span></summary>
+        {missingOptional.length > 0 && (
+          <div class="row gap wrap">
+            {missingOptional.map((c) => (
+              <button key={c} class="btn" onClick={() => store.saveSlots(addOptionalSlot(s, s.week_of, s.slots, c))}>
+                <Icon name="plus" size={18} /> Add {optionalLabel(c).toLowerCase()}
+              </button>
+            ))}
+          </div>
+        )}
+        <SnacksSection />
+      </details>
 
-      {s.slots.some((x) => !x.locked && x.meal_id) && (
-        <div class="row gap center">
-          <button class="btn" onClick={lockAll}><Icon name="lock" size={18} /> Lock all</button>
-          <button class="btn" onClick={refreshAll}><Icon name="reroll" size={18} /> Fresh suggestions</button>
+      {(unlockedCount > 0 || lockedCount > 0) && (
+        <div class="action-bar">
+          {unlockedCount > 0 ? (
+            <>
+              <button class="btn primary" onClick={lockAll}><Icon name="lock" size={18} /> Lock all ({unlockedCount})</button>
+              <button class="btn" onClick={refreshAll}><Icon name="reroll" size={18} /> Fresh picks</button>
+            </>
+          ) : (
+            <a class="btn primary" href="#/groceries"><Icon name="cart" size={18} /> Grocery list</a>
+          )}
         </div>
-      )}
-      {missingOptional.length > 0 && (
-        <div class="row gap center">
-          {missingOptional.map((c) => (
-            <button key={c} class="btn" onClick={() => store.saveSlots(addOptionalSlot(s, s.week_of, s.slots, c))}>
-              <Icon name="plus" size={18} /> Add {optionalLabel(c).toLowerCase()}
-            </button>
-          ))}
-        </div>
-      )}
-      <SnacksSection />
-
-      {lockedCount > 0 && (
-        <p class="center muted small">
-          <a href="#/groceries">Grocery list for locked meals →</a>
-        </p>
       )}
 
       {picking && (
@@ -175,7 +216,7 @@ export function MealMeta({ meal, last }: { meal: Meal; last?: string }) {
       {[
         meal.protein,
         meal.prep_min != null ? `${meal.prep_min} min prep` : mins ? `${mins} min` : '',
-        meal.ingredients.length ? `${meal.ingredients.length} ingredients` : '',
+        meal.ingredients.length ? `${meal.ingredients.length} ${meal.ingredients.length === 1 ? 'ingredient' : 'ingredients'}` : '',
         last ? `last ${short(last)}` : '',
       ].filter(Boolean).join(' · ')}
     </span>
@@ -183,22 +224,21 @@ export function MealMeta({ meal, last }: { meal: Meal; last?: string }) {
 }
 
 /** Estimated price of a dinner and its sides, from Prices & pantry and today's Kroger prices. */
-function PriceLine({ meal, slot, byId, pantry, prices }: {
-  meal: Meal; slot: Slot; byId: Map<string, Meal>; pantry: Map<string, PantryItem>; prices: Record<string, KrogerPrice>;
-}) {
+function dinnerCost(meal: Meal, slot: Slot, byId: Map<string, Meal>, pantry: Map<string, PantryItem>, prices: Record<string, KrogerPrice>) {
   const sides = slot.sides.map((x) => byId.get(x.id)).filter((m): m is Meal => !!m);
   const parts = [meal, ...sides].map((m) => mealCost(m, pantry, prices));
-  const cost = parts.reduce((sum, p) => sum + p.cost, 0);
-  const missing = parts.reduce((sum, p) => sum + p.missing, 0);
+  return {
+    cost: parts.reduce((sum, p) => sum + p.cost, 0),
+    missing: parts.reduce((sum, p) => sum + p.missing, 0),
+  };
+}
+
+function PriceLine({ meal, cost, hasSides }: { meal: Meal; cost: { cost: number; missing: number }; hasSides: boolean }) {
   if (!meal.ingredients.length) return <p class="price muted small">No ingredients yet, so no price estimate.</p>;
   return (
     <p class="price small">
-      {cost > 0 ? <>About <b>{money(cost)}</b>{sides.length ? ' with sides' : ''}</> : <span class="muted">No price estimate yet</span>}
-      {missing > 0 && (
-        <span class="muted">
-          {' · '}{missing} {missing === 1 ? 'ingredient has' : 'ingredients have'} no price (<a href="#/pantry">add prices</a>)
-        </span>
-      )}
+      {cost.cost > 0 ? <>About <b>{money(cost.cost)}</b>{hasSides ? ' with sides' : ''}</> : <span class="muted">No price estimate yet</span>}
+      {cost.missing > 0 && <span class="muted"> · {cost.missing} without a price</span>}
     </p>
   );
 }
@@ -211,8 +251,8 @@ function PickSheet({ slot, onClose, onPick }: { slot: Slot; onClose: () => void;
     .filter((m) => !m.archived && m.category === slot.category && m.name.toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
   return (
-    <Sheet title={`Pick for ${slotLabel(s.slots, slot)}`} onClose={onClose}>
-      <input class="search" type="search" placeholder="Search meals" value={q} onInput={(e) => setQ(e.currentTarget.value)} />
+    <Sheet title={`Pick for ${slotLabel(s.slots, slot)}`} onClose={onClose} tall>
+      <div class="search-row"><input class="search" type="search" placeholder="Search meals" value={q} onInput={(e) => setQ(e.currentTarget.value)} /></div>
       <ul class="list">
         {list.map((m) => (
           <li key={m.id}>

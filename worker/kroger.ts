@@ -232,6 +232,7 @@ export async function route(req: Request, env: Env, url: URL, path: string): Pro
         brand: p.brand ?? '',
         size: item.size ?? '',
         price: item.price?.promo || item.price?.regular || null,
+        regular: item.price?.regular || null,
         image: img?.url ?? null,
       };
     });
